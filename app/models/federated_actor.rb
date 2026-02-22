@@ -1,0 +1,2 @@
+class FederatedActor < ApplicationRecord
+end
