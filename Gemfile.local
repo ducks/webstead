@@ -1,0 +1,18 @@
+# Multi-tenancy
+gem 'apartment'
+
+# Federation
+gem 'http'
+
+group :development do
+  gem 'pry-rails'
+  gem 'annotate'
+  gem 'rubocop-rails', require: false
+end
+
+group :development, :test do
+  gem 'rspec-rails'
+  gem 'factory_bot_rails'
+  gem 'faker'
+  gem 'dotenv-rails'
+end
