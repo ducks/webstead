@@ -1,5 +1,5 @@
 class Webstead < ApplicationRecord
-  belongs_to :user
+  belongs_to :user, optional: true
 
   # Reserved subdomains that cannot be registered
   RESERVED_SUBDOMAINS = %w[
