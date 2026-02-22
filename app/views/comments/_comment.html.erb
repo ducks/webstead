@@ -1,0 +1,22 @@
+<%= turbo_frame_tag dom_id(comment) do %>
+  <div class="<%= comment.parent_id ? 'ml-8 border-l-2 border-gray-300 pl-4' : '' %> py-4">
+    <div class="flex items-start space-x-3">
+      <div class="flex-1">
+        <div class="flex items-center space-x-2 mb-2">
+          <span class="font-medium text-gray-900"><%= comment.actor_name %></span>
+          <span class="text-gray-500 text-sm">•</span>
+          <span class="text-gray-500 text-sm"><%= time_ago_in_words(comment.created_at) %> ago</span>
+        </div>
+        <div class="text-gray-700 leading-relaxed">
+          <%= simple_format(comment.body) %>
+        </div>
+      </div>
+    </div>
+    
+    <% if comment.replies.any? %>
+      <div class="mt-4 space-y-4">
+        <%= render partial: "comments/comment", collection: comment.replies, as: :comment %>
+      </div>
+    <% end %>
+  </div>
+<% end %>
