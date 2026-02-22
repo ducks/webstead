@@ -1,0 +1,70 @@
+order = 4
+what = "Add tenant isolation columns, indexes, and request-scoped Current pattern for secure multi-tenancy"
+why = "Ensures complete data isolation between websteads at the database level. The Current.webstead pattern provides request-scoped tenant context throughout the application stack, preventing accidental cross-tenant data leaks. Foreign key constraints and indexes ensure referential integrity and query performance for tenant-scoped queries."
+
+how = """
+Step-by-step implementation plan:
+
+1. Generate migration for tenant isolation columns:
+   - `rails g migration AddWebsteadIdToPostsAndComments`
+   - Add `webstead_id:bigint` to `posts` table (NOT NULL)
+   - Add `webstead_id:bigint` to `comments` table (NOT NULL)
+   - Add foreign key constraints: `add_foreign_key :posts, :websteads` and `add_foreign_key :comments, :websteads`
+   - Add composite indexes: `add_index :posts, [:webstead_id, :created_at]` and `add_index :comments, [:webstead_id, :post_id]`
+   - Add unique constraint for slug scoping: `add_index :posts, [:webstead_id, :slug], unique: true`
+
+2. Update models with tenant associations and default scopes:
+   - In `app/models/post.rb`: add `belongs_to :webstead` and `default_scope { where(webstead_id: Current.webstead&.id) }`
+   - In `app/models/comment.rb`: add `belongs_to :webstead` and `default_scope { where(webstead_id: Current.webstead&.id) }`
+   - Add validation: `validates :webstead_id, presence: true` to both models
+   - Add before_create callback to auto-set webstead_id: `before_create :set_webstead_id` with `def set_webstead_id; self.webstead_id ||= Current.webstead&.id; end`
+
+3. Implement Current.webstead pattern:
+   - Create `app/models/current.rb` inheriting from `ActiveSupport::CurrentAttributes`
+   - Add attribute: `attribute :webstead`
+   - Add helper method: `def webstead_id; webstead&.id; end`
+   - This provides thread-safe, request-scoped storage for current tenant
+
+4. Add tenant resolution in ApplicationController:
+   - Create `app/controllers/concerns/tenant_scoped.rb` module
+   - Implement `set_current_webstead` method that:
+     - Extracts subdomain from `request.host`
+     - Queries `Webstead.find_by!(subdomain: subdomain)` (raises 404 if not found)
+     - Sets `Current.webstead = webstead`
+   - Add `before_action :set_current_webstead` in module
+   - Include `TenantScoped` in `ApplicationController`
+
+5. Add database-level check constraints (defense in depth):
+   - Generate migration: `rails g migration AddTenantCheckConstraints`
+   - Add check constraint: `execute "ALTER TABLE posts ADD CONSTRAINT posts_webstead_id_check CHECK (webstead_id IS NOT NULL)"`
+   - Add check constraint: `execute "ALTER TABLE comments ADD CONSTRAINT comments_webstead_id_check CHECK (webstead_id IS NOT NULL)"`
+   - These prevent NULL webstead_id at the database level even if Rails validations are bypassed
+
+6. Update existing controllers to verify tenant context:
+   - In `PostsController` and `CommentsController`, queries automatically scoped via `default_scope`
+   - Explicitly use `Current.webstead.posts` instead of `Post.all` for clarity and intent
+   - Add spec to verify cross-tenant access raises `ActiveRecord::RecordNotFound`
+
+7. Add test coverage for tenant isolation:
+   - In `spec/models/post_spec.rb`: test that `Post.all` only returns posts for `Current.webstead`
+   - Test that creating post without `Current.webstead` set fails validation
+   - Test that manually setting wrong `webstead_id` fails foreign key constraint
+   - In `spec/requests/posts_spec.rb`: test that subdomain routing sets correct `Current.webstead`
+   - Test that accessing posts from different subdomain returns 404
+"""
+
+backup = "If default_scope causes issues with admin/background jobs (common problem), remove default_scope and instead use explicit scoping everywhere: replace model queries with `Current.webstead.posts` and `Current.webstead.comments`. Add Rubocop rule to enforce scoped queries. For background jobs that need to operate across tenants, wrap job execution in `Current.set(webstead: webstead) { ... }` block."
+
+[context]
+files = [
+  "app/models/webstead.rb",
+  "app/models/post.rb", 
+  "app/models/comment.rb",
+  "app/controllers/application_controller.rb",
+  "config/routes.rb",
+  "db/schema.rb"
+]
+dependencies = [
+  "rails ~> 8.0",
+  "pg (PostgreSQL with foreign key and check constraint support)"
+]

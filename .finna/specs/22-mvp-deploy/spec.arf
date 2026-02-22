@@ -1,0 +1,95 @@
+order = 22
+what = "Deploy MVP to production with monitoring and federation testing"
+why = "Validate that multi-tenant architecture, ActivityPub federation, and subdomain routing work correctly in production environment with real fediverse instances"
+how = """
+Step-by-step implementation plan:
+
+1. Pre-deployment preparation
+   - Review production.rb config (caching, asset compilation, error tracking)
+   - Ensure DATABASE_URL and REDIS_URL are configured
+   - Set SECRET_KEY_BASE and other required env vars
+   - Configure ALLOWED_HOSTS for wildcard subdomain routing
+   - Set up SSL certificate for *.webstead.dev (Let's Encrypt wildcard cert)
+   - Configure DNS wildcard A record pointing *.webstead.dev to production IP
+
+2. Deploy Rails application
+   - Choose hosting provider (Fly.io, Render, Heroku, or VPS with Kamal)
+   - Set up PostgreSQL database with proper connection pooling
+   - Set up Redis instance for caching and background jobs
+   - Deploy application with migrations (rails db:migrate)
+   - Start Sidekiq workers for background jobs (ActivityPub delivery)
+   - Verify health check endpoint responds
+
+3. Create test websteads
+   - Create webstead A: alice.webstead.dev
+   - Create webstead B: bob.webstead.dev
+   - Verify subdomain routing works correctly
+   - Test that alice cannot access bob's posts/comments
+
+4. Test multi-tenant isolation
+   - Log in to alice.webstead.dev, create post
+   - Verify post only appears on alice.webstead.dev
+   - Log in to bob.webstead.dev, create post
+   - Verify bob's post does NOT appear on alice.webstead.dev
+   - Check database to confirm webstead_id isolation working
+   - Test comment threading on each webstead independently
+
+5. Federation testing with real Mastodon
+   - Use existing Mastodon account (mastodon.social or fosstodon.org)
+   - From alice.webstead.dev, create and publish a post
+   - Verify ActivityPub outbox endpoint accessible: alice.webstead.dev/.well-known/webfinger?resource=acct:alice@webstead.dev
+   - Check that Sidekiq job ran for ActivityPub::PublishPostJob
+   - Search for alice@webstead.dev from Mastodon web UI
+   - Verify post appears in Mastodon feed with correct attribution
+   - Test replying from Mastodon to Webstead post
+   - Verify reply appears as comment on Webstead (if inbound federation implemented)
+
+6. Monitor for issues
+   - Set up application monitoring (Honeybadger, Sentry, or Bugsnag)
+   - Configure uptime monitoring (UptimeRobot or similar)
+   - Check Rails logs for errors (rails log/production.log)
+   - Monitor Sidekiq queue for failures or backlog
+   - Watch for DNS resolution issues with subdomains
+   - Monitor database connection pool usage
+   - Check SSL certificate auto-renewal is configured
+
+7. Load testing (optional but recommended)
+   - Use Apache Bench or siege to test concurrent requests
+   - Test subdomain routing under load (10-50 concurrent users)
+   - Monitor database query performance with rack-mini-profiler
+   - Check for N+1 queries in TopicsController and CommentsController
+   - Verify Redis caching working correctly
+
+8. Document production setup
+   - Add DEPLOYMENT.md with hosting provider setup steps
+   - Document environment variables required
+   - Add DNS configuration instructions
+   - Document SSL certificate setup process
+   - Add monitoring dashboard links
+   - Document rollback procedure if issues occur
+"""
+backup = "If full production deployment fails: deploy to staging environment first (staging.webstead.dev) and test federation with test Mastodon instance (mastodon.social test account). If subdomain routing fails: start with single-tenant deployment and add multi-tenancy once core functionality validated. If ActivityPub federation fails: deploy without federation first, validate core post/comment functionality, then add federation in follow-up deployment. If SSL wildcard cert fails: use individual certs per subdomain or deploy to platform with automatic SSL (Fly.io/Render)."
+
+[context]
+files = [
+    "config/environments/production.rb",
+    "config/routes.rb",
+    "app/models/webstead.rb",
+    "app/models/concerns/tenant_scoped.rb",
+    "app/jobs/activity_pub/publish_post_job.rb",
+    "app/controllers/activity_pub/outbox_controller.rb",
+    "config/initializers/sidekiq.rb",
+    ".well-known/webfinger",
+    "DEPLOYMENT.md",
+    "README.md"
+]
+dependencies = [
+    "PostgreSQL 14+",
+    "Redis 6+",
+    "Sidekiq",
+    "Let's Encrypt wildcard SSL certificate",
+    "DNS provider with wildcard A record support",
+    "Hosting platform (Fly.io/Render/Heroku/VPS)",
+    "Mastodon account for federation testing",
+    "Monitoring service (Sentry/Honeybadger/Bugsnag)"
+]

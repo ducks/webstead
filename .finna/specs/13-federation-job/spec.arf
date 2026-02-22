@@ -1,0 +1,88 @@
+order = 13
+what = "Create background job to deliver ActivityPub posts to follower inboxes via HTTP POST"
+why = "Federation requires async delivery of activities to remote servers. A background job handles retries, rate limiting, and prevents blocking the request/response cycle. Starting with Mastodon testing ensures we implement the protocol correctly before scaling to multiple instances."
+
+how = """
+Step-by-step implementation plan:
+
+1. Create FederatePostJob (app/jobs/federate_post_job.rb)
+   - Inherit from ApplicationJob
+   - Accept post_id and activity_type parameters (create, update, delete)
+   - Set queue as :federation with retry: 3
+   - Add exponential backoff for transient failures
+
+2. Implement job logic
+   - Load post and webstead (with actor keypair)
+   - Generate ActivityPub activity JSON via ActivityPubPublisher
+   - Fetch follower inbox URLs from webstead.followers (or FederatedActor table)
+   - For each inbox URL, deliver activity via HTTP POST
+   - Sign HTTP request with HTTP Signatures (draft-cavage-http-signatures)
+
+3. Add HTTP delivery helper method
+   - Use Net::HTTP or HTTParty for POST to inbox URL
+   - Set headers: Content-Type: application/activity+json, Date, Digest (SHA-256 of body)
+   - Generate HTTP Signature header using webstead's private key
+   - Handle responses: 2xx = success, 4xx = permanent failure (log), 5xx = retry
+   - Set 10 second timeout, raise on timeout for retry
+
+4. Add signature generation method
+   - Create signature string from (request-target), host, date, digest headers
+   - Sign with RSA-SHA256 using webstead.actor_private_key
+   - Format signature header per spec: keyId, algorithm, headers, signature
+
+5. Create test Mastodon follower fixture
+   - Add test helper to create FederatedActor with inbox_url pointing to test Mastodon instance
+   - Use VCR or WebMock to record/replay HTTP requests during tests
+   - Or use real test Mastodon instance (mastodon.local or public test server)
+
+6. Write tests (spec/jobs/federate_post_job_spec.rb)
+   - Test job enqueues successfully with post_id
+   - Test activity generation calls ActivityPubPublisher correctly
+   - Test HTTP POST delivery to follower inboxes
+   - Test HTTP signature generation and header format
+   - Test retry behavior on 5xx responses
+   - Test permanent failure logging on 4xx responses
+   - Test graceful handling when post or webstead not found
+
+7. Add job invocation to Post model callbacks
+   - In Post#after_commit (on: :create), enqueue FederatePostJob.perform_later(id, 'Create')
+   - In Post#after_commit (on: :update), check if published_at changed, enqueue with 'Update'
+   - In Post#after_commit (on: :destroy), enqueue with 'Delete'
+   - Only enqueue if post.published? (don't federate drafts)
+
+8. Add follower tracking (if not done in previous steps)
+   - Ensure FederatedActor model has inbox_url field
+   - Ensure Webstead has_many :followers (FederatedActor records)
+   - For testing, manually create a FederatedActor pointing to test Mastodon account
+
+9. Add logging and monitoring
+   - Log successful deliveries (info level)
+   - Log failures with inbox URL and response (error level)
+   - Track delivery metrics (consider StatsD or Prometheus if available)
+
+10. Test end-to-end with real Mastodon instance
+    - Create test Mastodon account, follow webstead actor
+    - Publish post from Rails console
+    - Verify job runs, HTTP request sent, Mastodon receives activity
+    - Check Mastodon instance for post appearing in timeline
+"""
+
+backup = "If HTTP Signatures prove difficult, start with unsigned requests to permissive test servers and add signatures incrementally. If Sidekiq not available, use ActiveJob with async adapter (though production should use Sidekiq). If test Mastodon instance unavailable, use WebMock to stub HTTP responses and defer real federation testing until deployment."
+
+[context]
+files = [
+  "app/jobs/federate_post_job.rb",
+  "app/services/activity_pub_publisher.rb",
+  "app/models/post.rb",
+  "app/models/webstead.rb",
+  "app/models/federated_actor.rb",
+  "spec/jobs/federate_post_job_spec.rb",
+  "config/sidekiq.yml"
+]
+dependencies = [
+  "net/http (Ruby stdlib)",
+  "openssl (Ruby stdlib for RSA signing)",
+  "sidekiq or ActiveJob backend",
+  "Test Mastodon instance or WebMock gem",
+  "ActivityPub HTTP Signatures spec: https://www.w3.org/wiki/SocialCG/ActivityPub/Authentication_Authorization"
+]

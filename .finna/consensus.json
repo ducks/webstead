@@ -1,0 +1,40 @@
+Looking at the proposals, I need to see what we're synthesizing. Let me check if there are multiple proposals in files or if this is asking me to validate/structure the single Claude proposal shown.
+
+Since you're asking me to "synthesize these proposals into consensus" but only showing one proposal, I'll provide the structured output based on that proposal:
+
+```json
+{
+  "approach": "Build multi-tenant Rails 8 app with subdomain routing, ActivityPub federation, and threaded comments. Start with minimal viable federation (outbound posts only), add bidirectional later. Use Hotwire for reactive UI without heavy JS. PostgreSQL row-level security for tenant isolation.",
+  "key_decisions": [
+    "Multi-tenant architecture with shared database and row-level security (simpler than separate schemas, scales to thousands of sites)",
+    "Subdomain routing first, custom domains via CNAME later (reduces initial complexity)",
+    "ActivityPub federation outbound-only for MVP (publish to fediverse, defer inbound replies)",
+    "Hotwire/Turbo over React/Vue (matches Rails philosophy, less complexity, still reactive)",
+    "Threaded comments with parent_id (simple, proven pattern from Discourse/Reddit)",
+    "federated_actors cache table (avoid hitting remote servers for every comment render)",
+    "Start with single default theme (defer multi-theme support until post-MVP)",
+    "Use Rails 8 built-in authentication (Devise adds complexity for simple use case)"
+  ],
+  "files": [
+    "app/models/webstead.rb",
+    "app/models/post.rb",
+    "app/models/comment.rb",
+    "app/models/federated_actor.rb",
+    "app/controllers/websteads_controller.rb",
+    "app/controllers/posts_controller.rb",
+    "app/controllers/comments_controller.rb",
+    "app/controllers/activitypub/outbox_controller.rb",
+    "app/services/activity_pub/publisher.rb",
+    "app/jobs/federate_post_job.rb",
+    "config/routes.rb",
+    "db/migrate/001_create_websteads.rb",
+    "db/migrate/002_create_posts.rb",
+    "db/migrate/003_create_comments.rb",
+    "db/migrate/004_create_federated_actors.rb",
+    "app/views/layouts/application.html.erb",
+    "app/views/posts/index.html.erb",
+    "app/views/posts/show.html.erb",
+    "config/initializers/subdomain_constraints.rb"
+  ]
+}
+```

@@ -1,0 +1,111 @@
+order = 11
+what = "Create ActivityPub outbox controller to serve Actor objects and activity collections"
+why = "Enable federation by exposing WebFinger discovery and outbox endpoints that allow Mastodon and other ActivityPub servers to find and follow users, retrieve their public posts, and subscribe to updates"
+how = """
+Step-by-step implementation plan:
+
+1. Create ActivityPub::OutboxController at app/controllers/activity_pub/outbox_controller.rb
+   - Inherit from ApplicationController
+   - Set before_action :set_webstead_from_subdomain
+   - Skip CSRF verification (ActivityPub clients don't use cookies)
+   - Set default response format to application/activity+json
+
+2. Implement webfinger action for /.well-known/webfinger endpoint
+   - Extract 'resource' param (e.g., acct:username@webstead.dev)
+   - Parse username from resource string
+   - Verify username matches current webstead
+   - Return JSON with subject, aliases, and links to Actor object
+   - Handle 404 if webstead not found or username mismatch
+   - Set Content-Type: application/jrd+json
+
+3. Implement actor action for /@username endpoint
+   - Find webstead by subdomain (already set by before_action)
+   - Build Actor object (Person type) with required ActivityPub fields:
+     * @context: https://www.w3.org/ns/activitystreams
+     * id: full URL to this actor (https://username.webstead.dev/@username)
+     * type: Person
+     * preferredUsername: webstead.subdomain
+     * inbox: URL for receiving activities (stub for now)
+     * outbox: URL to outbox collection
+     * publicKey: RSA public key for HTTP signatures (generate on webstead creation)
+   - Set Content-Type: application/activity+json
+   - Cache with ETag based on webstead.updated_at
+
+4. Implement outbox action for /@username/outbox endpoint
+   - Find webstead by subdomain
+   - Build OrderedCollection with:
+     * @context: https://www.w3.org/ns/activitystreams
+     * id: full URL to this outbox
+     * type: OrderedCollection
+     * totalItems: count of published posts
+     * first: URL to first page (/outbox?page=1)
+     * last: URL to last page
+   - If page param present, return OrderedCollectionPage with:
+     * orderedItems: array of Create activities wrapping Note objects
+     * next/prev: pagination URLs if applicable
+   - Convert Post records to ActivityPub Note objects
+   - Only include published posts (exclude drafts)
+   - Order by created_at DESC
+   - Paginate with 20 items per page
+   - Set Content-Type: application/activity+json
+
+5. Add routes to config/routes.rb
+   - get '/.well-known/webfinger', to: 'activity_pub/outbox#webfinger'
+   - get '/@:username', to: 'activity_pub/outbox#actor', constraints: { username: /[a-z0-9_-]+/ }
+   - get '/@:username/outbox', to: 'activity_pub/outbox#outbox'
+   - These routes must be accessible from subdomain and root domain
+
+6. Generate RSA keypair on webstead creation
+   - Add migration: add_column :websteads, :private_key, :text
+   - Add migration: add_column :websteads, :public_key, :text
+   - Update Webstead model with after_create callback
+   - Generate 2048-bit RSA keypair using OpenSSL::PKey::RSA
+   - Store private key PEM in websteads.private_key (encrypt at rest in production)
+   - Store public key PEM in websteads.public_key
+   - Add public_key_url method to return full URL to actor's publicKey
+
+7. Add helper methods to Webstead model
+   - actor_url: returns https://subdomain.webstead.dev/@subdomain
+   - outbox_url: returns https://subdomain.webstead.dev/@subdomain/outbox
+   - inbox_url: returns https://subdomain.webstead.dev/@subdomain/inbox (stub)
+   - webfinger_url: returns /.well-known/webfinger?resource=acct:subdomain@webstead.dev
+
+8. Test WebFinger discovery flow
+   - curl '/.well-known/webfinger?resource=acct:alice@webstead.dev'
+   - Should return JRD with links to Actor object
+   - Verify Content-Type header is application/jrd+json
+
+9. Test Actor object retrieval
+   - curl -H 'Accept: application/activity+json' https://alice.webstead.dev/@alice
+   - Should return Person object with all required ActivityPub fields
+   - Verify publicKey is included with correct format
+
+10. Test outbox collection retrieval
+    - curl -H 'Accept: application/activity+json' https://alice.webstead.dev/@alice/outbox
+    - Should return OrderedCollection with totalItems count
+    - Test pagination with ?page=1 param
+    - Verify only published posts are included
+    - Verify Create activities wrap Note objects correctly
+
+11. Validate against ActivityPub spec
+    - Actor object must have @context, id, type, inbox, outbox
+    - OrderedCollection must have @context, id, type, totalItems
+    - Note objects must have id, type, content, published, attributedTo
+    - All URLs must be absolute (include protocol and domain)
+    - Content-Type must be application/activity+json or application/ld+json
+"""
+backup = "If RSA keypair generation fails or causes performance issues, use a single shared keypair for all websteads initially (less secure but simpler). If OrderedCollection pagination is complex, start with unpaginated collection limited to 50 most recent items. If WebFinger routing conflicts with existing routes, namespace under /activitypub/.well-known/webfinger instead."
+
+[context]
+files = [
+  "app/models/webstead.rb",
+  "app/models/post.rb",
+  "config/routes.rb",
+  "app/controllers/application_controller.rb"
+]
+dependencies = [
+  "openssl (Ruby stdlib for RSA keypair generation)",
+  "ActivityPub spec: https://www.w3.org/TR/activitypub/",
+  "WebFinger RFC 7033: https://tools.ietf.org/html/rfc7033",
+  "ActivityStreams vocabulary: https://www.w3.org/TR/activitystreams-vocabulary/"
+]

@@ -1,0 +1,9 @@
+log/*
+tmp/*
+.env
+.DS_Store
+*.swp
+*.swo
+*~
+.ruby-version
+.ruby-gemset

@@ -1,0 +1,61 @@
+order = 5
+what = "Create Post model with markdown body, publish state, and tenant isolation"
+why = "Posts are the core content unit that users create and federate. Each post belongs to a webstead (tenant), supports draft/published workflow, and stores markdown content that will be rendered to HTML and federated as ActivityPub Notes."
+
+how = """
+1. Generate Post migration and model:
+   - rails g model Post webstead:references title:string body:text published_at:timestamp
+   - Add NOT NULL constraints to webstead_id and title in migration
+   - Add index on [webstead_id, published_at] for efficient published post queries
+   - Add index on [webstead_id, created_at] for draft listing
+
+2. Configure Post model (app/models/post.rb):
+   - belongs_to :webstead (validates presence automatically via references)
+   - Validate title presence and length (min 1, max 300 chars)
+   - Validate body presence (blank drafts OK, but published posts need content)
+   - Add custom validation: published posts must have published_at timestamp
+
+3. Add publication scopes:
+   - scope :published, -> { where.not(published_at: nil).where('published_at <= ?', Time.current) }
+   - scope :draft, -> { where(published_at: nil) }
+   - scope :scheduled, -> { where('published_at > ?', Time.current) }
+   - scope :recent, -> { order(published_at: :desc, created_at: :desc) }
+
+4. Add publish/unpublish methods:
+   - def publish! / publish(time = Time.current) - sets published_at
+   - def unpublish! - sets published_at to nil
+   - def published? - checks published_at <= Time.current
+   - def draft? - checks published_at.nil?
+   - def scheduled? - checks published_at > Time.current
+
+5. Add tenant isolation query helpers:
+   - def self.for_webstead(webstead) - where(webstead: webstead)
+   - Works with Current.webstead pattern from step 3
+
+6. Write tests (test/models/post_test.rb):
+   - Validate title/body requirements
+   - Test published/draft/scheduled scopes
+   - Test publish!/unpublish! state transitions
+   - Test published? / draft? / scheduled? predicates
+   - Test tenant isolation via webstead_id foreign key
+   - Test that published scope respects time (future dates filtered out)
+
+7. Run migration and verify:
+   - rails db:migrate
+   - rails console: verify Post.new, scopes, and validations work
+"""
+
+backup = "If Rails 8 doesn't include good markdown rendering, add commonmarker gem. If scopes are too complex, start with just published/draft and add scheduled later. If validation is tricky, start permissive and tighten based on real usage."
+
+[context]
+files = [
+  "app/models/post.rb",
+  "app/models/webstead.rb",
+  "db/migrate/*_create_posts.rb",
+  "test/models/post_test.rb"
+]
+dependencies = [
+  "Rails 8.0+",
+  "PostgreSQL (timestamp with time zone support)",
+  "Webstead model from step 4"
+]

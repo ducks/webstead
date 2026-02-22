@@ -1,0 +1,36 @@
+order = 7
+what = "Create FederatedActor model to cache remote ActivityPub users"
+why = "Enable local caching of remote fediverse users who comment on your posts. Avoids refetching actor info from remote servers on every page load, stores minimal profile data (username, display name, avatar) for display in comment threads."
+how = """
+Step-by-step implementation plan:
+1. Generate model: `rails g model FederatedActor actor_uri:string username:string display_name:string avatar_url:string last_fetched_at:datetime`
+2. Add validations to app/models/federated_actor.rb:
+   - validates :actor_uri, presence: true, uniqueness: true, format: { with: URI::DEFAULT_PARSER.make_regexp(%w[http https]) }
+   - validates :username, presence: true
+3. Add index on actor_uri (unique) for fast lookups by ActivityPub ID
+4. Add index on last_fetched_at for cache expiration queries
+5. Add class method `fetch_or_create(actor_uri)` that:
+   - Checks if actor exists in DB with fresh data (< 24 hours old)
+   - If stale/missing, fetches from remote server via HTTP GET with Accept: application/activity+json
+   - Parses JSON-LD response for preferredUsername, name, icon.url
+   - Creates or updates local FederatedActor record
+   - Returns the FederatedActor instance
+6. Run migration: `rails db:migrate`
+7. Test in rails console:
+   - FederatedActor.fetch_or_create('https://mastodon.social/users/example')
+   - Verify it stores username, display_name, avatar_url
+   - Verify subsequent calls return cached data without HTTP request
+"""
+backup = "If ActivityPub fetching is too complex initially, create model with manual seeding and add fetch_or_create later. Start with just actor_uri and username as required fields, make display_name and avatar_url nullable. This lets Comment model reference FederatedActor immediately while deferring remote fetching implementation."
+
+[context]
+files = [
+  "app/models/federated_actor.rb",
+  "db/migrate/TIMESTAMP_create_federated_actors.rb",
+  "app/models/comment.rb"
+]
+dependencies = [
+  "net/http (Ruby stdlib)",
+  "json-ld gem for parsing ActivityPub responses",
+  "addressable gem for URI validation"
+]

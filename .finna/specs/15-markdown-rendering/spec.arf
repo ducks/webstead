@@ -1,0 +1,21 @@
+order = 15
+what = "Add markdown gem and build safe rendering helper with syntax highlighting"
+why = "Posts and comments are stored as markdown in the database. We need secure rendering that prevents XSS while supporting code blocks with syntax highlighting for technical content creators."
+how = """
+Step-by-step implementation plan:
+1. Add commonmarker gem to Gemfile (modern, CommonMark-compliant, safer than redcarpet)
+2. Add rouge gem for syntax highlighting
+3. Create app/helpers/markdown_helper.rb with render_markdown(text) method
+4. Configure commonmarker with safe options: no raw HTML, validate UTF-8, use GitHub-Flavored Markdown extensions (tables, strikethrough, autolinks)
+5. Add rouge formatter to highlight code blocks (wrap in <pre><code class="language-ruby">)
+6. Sanitize rendered HTML with Rails sanitize() helper using strict allowlist (p, br, strong, em, ul, ol, li, blockquote, h1-h6, a, code, pre, table, thead, tbody, tr, th, td)
+7. Add syntax highlighting CSS from rouge (generate rouge.css stylesheet)
+8. Test with dangerous input: <script> tags, javascript: links, data: URIs, img with onerror
+9. Test with code blocks in multiple languages (ruby, javascript, sql, bash)
+10. Add render_markdown calls to app/views/posts/show.html.erb and app/views/comments/_comment.html.erb
+"""
+backup = "If commonmarker has issues, fall back to kramdown (pure Ruby, slower but reliable). If rouge is too heavy, use highlight.js client-side instead."
+
+[context]
+files = ["Gemfile", "app/helpers/markdown_helper.rb", "app/views/posts/show.html.erb", "app/views/comments/_comment.html.erb", "app/assets/stylesheets/rouge.css"]
+dependencies = ["commonmarker gem", "rouge gem"]

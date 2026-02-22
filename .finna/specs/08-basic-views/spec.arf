@@ -1,0 +1,73 @@
+order = 8
+what = "Build Hotwire views with Tailwind for posts index, post detail with nested comments"
+why = "Provide the core user-facing interface for viewing posts and participating in threaded discussions. Uses Rails 8's built-in Hotwire stack for reactive UI without heavy JavaScript frameworks, keeping the platform simple and maintainable."
+
+how = """
+1. Create application layout with Turbo integration
+   - app/views/layouts/application.html.erb with <%= turbo_include_tag %> and <%= stylesheet_link_tag "tailwind" %>
+   - Add minimal navigation: webstead name/tagline, posts link
+   - Include Current.webstead for tenant-aware rendering
+   - Add <meta name="turbo-cache-control" content="no-cache"> to prevent stale cached content across tenants
+
+2. Build posts index view (app/views/posts/index.html.erb)
+   - Loop through @posts with <%= turbo_frame_tag dom_id(post) do %>
+   - Display post.title as link to show page
+   - Show post.published_at as formatted date
+   - Display truncated post.content (first 200 chars with "..." if longer)
+   - Add Tailwind classes: max-w-4xl mx-auto, divide-y for post separation
+   - Empty state message if @posts.empty?
+
+3. Build post show view (app/views/posts/show.html.erb)
+   - Render full post.content with markdown parsing (install kramdown gem)
+   - Add helper method markdown_to_html(text) in ApplicationHelper
+   - Display post metadata: published_at, author (Current.webstead.subdomain)
+   - Wrap in Turbo Frame for seamless navigation
+
+4. Create comment partial for recursive nesting (app/views/comments/_comment.html.erb)
+   - Display comment.content, comment.actor_name, comment.created_at
+   - Recursively render comment.replies with <%= render partial: 'comments/comment', collection: comment.replies, as: :comment %>
+   - Add Tailwind classes: ml-8 for nesting indentation, border-l-2 for thread lines
+   - Use Turbo Frame per comment for future inline replies
+
+5. Build comments section in post show view
+   - Add <%= render partial: 'comments/comment', collection: @comments, as: :comment %> after post content
+   - @comments should be root-level only (parent_id: nil) from controller
+   - Empty state: "No comments yet" if @comments.empty?
+   - Add horizontal divider between post and comments
+
+6. Style with Tailwind utilities
+   - Use prose class for markdown content (install @tailwindcss/typography plugin)
+   - Card-like containers: bg-white shadow rounded-lg p-6
+   - Responsive typography: text-lg md:text-xl for titles
+   - Muted text for metadata: text-gray-600 text-sm
+   - Spacing: space-y-6 for vertical rhythm
+
+7. Add Turbo Stream support for future real-time updates
+   - Wrap comments section in <%= turbo_stream_from @post %> for broadcast target
+   - No backend implementation yet, just structure for step 12 (real-time)
+   - Controller responds to turbo_stream format: respond_to do |format| format.html; format.turbo_stream; end
+
+8. Test multi-tenant rendering
+   - Visit subdomain1.localhost:3000 and subdomain2.localhost:3000
+   - Verify each shows only their own posts
+   - Check that Current.webstead context is correct in views
+   - Ensure Turbo navigation works within tenant (no cross-tenant leaks)
+"""
+
+backup = "If Hotwire/Turbo causes issues, fall back to traditional Rails views with full page refreshes (remove turbo_frame_tag and turbo_include_tag). For markdown rendering, if kramdown has problems, use Redcarpet gem instead or simple_format helper for basic formatting. For nested comments, if recursion causes performance issues with deep threads, implement depth limit (max 10 levels) or flatten structure with indentation-only UI."
+
+[context]
+files = [
+  "app/views/layouts/application.html.erb",
+  "app/views/posts/index.html.erb",
+  "app/views/posts/show.html.erb",
+  "app/views/comments/_comment.html.erb",
+  "app/helpers/application_helper.rb",
+  "app/controllers/posts_controller.rb",
+  "config/tailwind.config.js"
+]
+dependencies = [
+  "kramdown",
+  "tailwindcss-rails",
+  "@tailwindcss/typography"
+]

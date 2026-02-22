@@ -1,0 +1,50 @@
+order = 3
+what = "Configure Rails to route requests based on subdomain and set current tenant context"
+why = "Multi-tenancy requires identifying which webstead to serve based on the subdomain in the request URL (e.g., alice.webstead.dev vs bob.webstead.dev). Without subdomain routing, all users would see the same content. This step establishes the tenant resolution layer that every request flows through."
+how = """
+1. Add subdomain constraint to routes.rb
+   - Wrap all content routes (posts, comments) with `constraints(subdomain: /.+/)` block
+   - Exclude 'www' and 'api' subdomains from constraint (reserved)
+   - Keep root domain routes outside constraint (landing page, auth)
+   - Example: `constraints(subdomain: /.+/) { resources :posts; resources :comments }`
+
+2. Create middleware to resolve and set current webstead
+   - Generate middleware: `rails g middleware SetCurrentWebstead`
+   - In middleware#call: extract subdomain from `request.host`
+   - Query `Webstead.find_by(subdomain: extracted_subdomain)`
+   - If found: store in `Current.webstead = webstead` (Rails Current Attributes)
+   - If not found: render 404 with "Webstead not found" message
+   - Register middleware in `config/application.rb` before ActionDispatch::Executor
+
+3. Create Current model for thread-safe tenant context
+   - Generate: `rails g model current --skip-migration`
+   - Delete generated migration, this is not a database model
+   - In `app/models/current.rb`: `class Current < ActiveSupport::CurrentAttributes; attribute :webstead; end`
+   - This provides `Current.webstead` accessible throughout request lifecycle
+   - Automatically resets between requests (thread-safe)
+
+4. Add webstead resolution helpers
+   - In ApplicationController: `helper_method :current_webstead`
+   - Define `def current_webstead; Current.webstead; end`
+   - Add `before_action :require_webstead` for controllers that need tenant context
+   - Define `def require_webstead; render_404 unless current_webstead; end`
+
+5. Handle 404 case gracefully
+   - Create `app/views/errors/webstead_not_found.html.erb`
+   - Render with 404 status and helpful message (check spelling, webstead may not exist)
+   - Log missing subdomain attempts for monitoring
+   - Consider rate limiting to prevent subdomain enumeration attacks
+
+6. Test subdomain routing
+   - In test/integration: create test for subdomain routing
+   - Test valid subdomain resolves correct webstead
+   - Test invalid subdomain returns 404
+   - Test reserved subdomains (www, api) are excluded
+   - Test root domain (no subdomain) shows landing page
+   - Use `host` header in requests: `get posts_url, headers: { 'Host': 'alice.webstead.test' }`
+"""
+backup = "If subdomain constraints don't work in development (localhost doesn't support subdomains), use lvh.me domain which resolves all subdomains to 127.0.0.1, or configure /etc/hosts with manual subdomain entries (alice.webstead.test, bob.webstead.test), or implement path-based tenancy as fallback (/alice/posts instead of alice.webstead.dev/posts)"
+
+[context]
+files = ["config/routes.rb", "config/application.rb", "app/controllers/application_controller.rb", "app/models/current.rb"]
+dependencies = ["Rails routing constraints", "ActiveSupport::CurrentAttributes", "Rack middleware"]

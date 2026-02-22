@@ -1,0 +1,46 @@
+order = 10
+what = "Implement CommentsController with create action for nested replies and Turbo Stream responses"
+why = "Enable users to post threaded comments on content and see replies appear instantly without page refresh. Turbo Streams provide the reactive UX expected on modern web platforms while keeping the stack simple."
+how = """
+Step-by-step implementation plan:
+1. Generate CommentsController with `rails g controller Comments create --no-helper --no-assets`
+2. Add route in config/routes.rb: `resources :comments, only: [:create]`
+3. Implement CommentsController#create action:
+   - Find the parent (Post or Comment) via polymorphic params
+   - Set webstead_id from Current.webstead
+   - Build new comment with parent association and comment_params
+   - Handle both local users and federated actors (use actor_type and actor_id)
+   - Save comment and respond with Turbo Stream on success
+4. Add strong parameters method comment_params permitting: :content, :parent_type, :parent_id, :actor_id, :actor_type
+5. Create app/views/comments/create.turbo_stream.erb view:
+   - Use turbo_stream.append to insert new comment into parent's comment list
+   - Target: dom_id(parent, :comments) or similar
+   - Render partial: "comments/comment" with locals: { comment: @comment }
+6. Add validation and error handling:
+   - If save fails, respond with turbo_stream.replace of form with errors
+   - Add flash messages for success/failure via turbo_stream.update
+7. Create app/views/comments/_comment.html.erb partial:
+   - Display comment content, author name, timestamp
+   - Show nested reply count if comment has children
+   - Include "Reply" button/link to show nested reply form
+   - Use Turbo Frame for nested reply forms (optional optimization)
+8. Add authentication check before_action :authenticate_user! (or equivalent)
+9. Add authorization to ensure user can comment on this webstead's content
+10. Test manually: create top-level comment, create nested reply, verify Turbo Stream insertion
+"""
+backup = "If Turbo Streams don't work initially, fall back to standard HTML redirect with notice flash and full page reload. Add Turbo Streams as progressive enhancement after basic flow works. Alternatively, use Turbo Frames instead of Turbo Streams for simpler scoped updates."
+
+[context]
+files = [
+  "app/controllers/comments_controller.rb",
+  "config/routes.rb",
+  "app/views/comments/create.turbo_stream.erb",
+  "app/views/comments/_comment.html.erb",
+  "app/models/comment.rb",
+  "app/models/post.rb"
+]
+dependencies = [
+  "Hotwire/Turbo Rails (included in Rails 8 by default)",
+  "Current.webstead middleware for tenant context",
+  "Authentication system (Rails 8 built-in or custom)"
+]

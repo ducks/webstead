@@ -1,0 +1,98 @@
+order = 21
+what = "Configure production infrastructure for multi-tenant deployment"
+why = "Webstead needs production-grade deployment with subdomain routing (username.webstead.dev), persistent database, and containerized app delivery. This step transforms the Rails app from development to production-ready with proper DNS, database config, and deployment automation."
+
+how = """
+Step-by-step implementation plan:
+
+1. Production Database Configuration
+   - Set up PostgreSQL connection pooling (pgbouncer recommended)
+   - Configure DATABASE_URL environment variable
+   - Set up database backup strategy (pg_dump scheduled via cron or managed service)
+   - Configure connection pool size (RAILS_MAX_THREADS + 5 recommended)
+   - Enable SSL for database connections in production
+   - Set up read replicas if scaling needed (future optimization)
+
+2. Wildcard DNS Configuration
+   - Register webstead.dev domain (already acquired according to notes)
+   - Configure DNS provider with wildcard A record: *.webstead.dev → server IP
+   - Add root A record: webstead.dev → server IP (marketing/landing page)
+   - Set up SSL certificate for wildcard domain (Let's Encrypt with DNS-01 challenge)
+   - Configure certbot or acme.sh for automatic renewal
+   - Test DNS propagation: dig test.webstead.dev, dig user.webstead.dev
+
+3. Dockerfile Creation
+   - Use Ruby 3.3+ base image (ruby:3.3-alpine for smaller size)
+   - Install system dependencies: nodejs, postgresql-client, imagemagick
+   - Copy Gemfile/Gemfile.lock and bundle install
+   - Copy app code and precompile assets (rails assets:precompile)
+   - Set RAILS_ENV=production, expose port 3000
+   - Add healthcheck endpoint (GET /up) for container orchestration
+   - Use multi-stage build to reduce final image size
+
+4. Environment Configuration
+   - Create .env.production.sample with all required vars
+   - Required env vars:
+     * DATABASE_URL (postgres://...)
+     * SECRET_KEY_BASE (rails secret)
+     * RAILS_ENV=production
+     * RAILS_LOG_TO_STDOUT=true
+     * RAILS_SERVE_STATIC_FILES=true (if not using CDN)
+   - Set up secure secret management (Rails encrypted credentials or vault)
+   - Configure ActionMailer SMTP settings for emails
+
+5. Deployment Configuration (Docker Compose)
+   - Create docker-compose.production.yml
+   - Services: web (Rails), postgres, redis (for ActionCable/jobs)
+   - Configure volumes for persistent data (postgres_data)
+   - Set up reverse proxy (nginx) for SSL termination and routing
+   - Configure nginx to route *.webstead.dev to Rails app
+   - Add log aggregation (optional: fluentd/loki)
+
+6. Deployment Automation
+   - Create bin/deploy script for automated deployments
+   - Steps: pull code, build image, run migrations, restart containers
+   - Add zero-downtime deployment strategy (rolling restart)
+   - Set up CI/CD pipeline (GitHub Actions) for automated deploys on push to main
+   - Configure health checks and rollback on failure
+
+7. Monitoring and Logging
+   - Set up application logging (rails logger to stdout)
+   - Configure structured logging (lograge gem)
+   - Add error tracking (Sentry, Honeybadger, or Rollbar)
+   - Set up uptime monitoring (UptimeRobot or Pingdom)
+   - Configure performance monitoring (Skylight, New Relic, or Scout APM)
+
+8. Initial Deploy and Smoke Tests
+   - Deploy to production server
+   - Run rails db:migrate
+   - Create first webstead via rails console to test subdomain routing
+   - Test: curl -H "Host: testuser.webstead.dev" http://server-ip
+   - Verify SSL certificates working
+   - Test ActivityPub endpoints (/.well-known/webfinger)
+   - Monitor logs for errors during first 24 hours
+"""
+
+backup = "If Docker deployment proves complex, use Kamal (formerly mrsk) for simpler container orchestration. If wildcard DNS issues occur, use separate A records per subdomain initially and script their creation. For database, can start with managed PostgreSQL (Digital Ocean, AWS RDS, Railway) instead of self-hosted. If SSL wildcard cert fails, use Cloudflare proxy with free SSL."
+
+[context]
+files = [
+    "config/database.yml",
+    "config/environments/production.rb",
+    "config/puma.rb",
+    "Dockerfile",
+    "docker-compose.production.yml",
+    ".env.production.sample",
+    "bin/deploy",
+    ".github/workflows/deploy.yml",
+    "config/initializers/rack_attack.rb"
+]
+dependencies = [
+    "Docker and Docker Compose",
+    "PostgreSQL 14+",
+    "Redis (for ActionCable/background jobs)",
+    "nginx or Caddy (reverse proxy)",
+    "certbot or acme.sh (SSL certificates)",
+    "DNS provider with API access (Cloudflare, Route53, etc.)",
+    "Production server (VPS, EC2, or PaaS like Fly.io/Railway)"
+]

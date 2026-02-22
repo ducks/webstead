@@ -1,0 +1,65 @@
+order = 6
+what = "Create Comment model for threaded discussions with federated author support"
+why = "Comments enable community discussions on posts. Supports both local users and federated ActivityPub actors, with self-referential threading via parent_id for Reddit/HN-style nested conversations."
+
+how = """
+Step-by-step implementation plan:
+
+1. Generate Comment model with migration:
+   rails g model Comment body:text parent_id:integer post_id:integer webstead_id:integer user_id:integer federated_actor_id:integer created_at:datetime updated_at:datetime
+
+2. Update migration file (db/migrate/TIMESTAMP_create_comments.rb):
+   - Add null: false to body, post_id, webstead_id, created_at, updated_at
+   - Add foreign key constraints: post_id → posts.id, webstead_id → websteads.id
+   - Add optional foreign keys: user_id → users.id, federated_actor_id → federated_actors.id
+   - Add self-referential foreign key: parent_id → comments.id (on_delete: :cascade)
+   - Add index on [post_id, created_at] for efficient loading
+   - Add index on parent_id for threading queries
+   - Add index on webstead_id for tenant isolation
+   - Add check constraint: (user_id IS NOT NULL AND federated_actor_id IS NULL) OR (user_id IS NULL AND federated_actor_id IS NOT NULL)
+
+3. Update Comment model (app/models/comment.rb):
+   - Add belongs_to :post
+   - Add belongs_to :webstead
+   - Add optional belongs_to :user
+   - Add optional belongs_to :federated_actor
+   - Add self-referential associations: belongs_to :parent, class_name: 'Comment', optional: true
+   - Add has_many :replies, class_name: 'Comment', foreign_key: :parent_id, dependent: :destroy
+   - Add validations: presence of body (minimum 1 character), post_id, webstead_id
+   - Add custom validation: ensure exactly one of user_id or federated_actor_id is present
+   - Add scope :root_comments (where parent_id: nil) for top-level comments
+   - Add scope :ordered (order created_at: :asc) for chronological display
+   - Add method author that returns user or federated_actor
+   - Add method author_name that returns user.username or federated_actor.display_name
+   - Add method local? that returns true if user_id present
+
+4. Run migration:
+   rails db:migrate
+
+5. Add fixtures for testing (test/fixtures/comments.yml):
+   - root_comment: local user, no parent_id
+   - reply_comment: local user, parent_id references root_comment
+   - federated_comment: federated actor, no parent_id
+
+6. Write model tests (test/models/comment_test.rb):
+   - Test associations (post, webstead, user, federated_actor, parent, replies)
+   - Test validations (body presence, exactly one author type)
+   - Test author method returns correct object
+   - Test author_name returns correct string
+   - Test local? returns true for user_id, false for federated_actor_id
+   - Test root_comments scope excludes replies
+   - Test threaded replies work correctly (parent → children cascade)
+   - Test tenant isolation (can't comment on another webstead's post)
+"""
+
+backup = "If check constraint fails on older PostgreSQL, implement author validation in model callback (before_validation). If self-referential association causes issues, use acts_as_tree gem or ancestry gem for more robust tree structure. If threading performance is poor with deep nesting, add depth column and limit nesting to 5 levels."
+
+[context]
+files = [
+  "app/models/post.rb",
+  "app/models/webstead.rb",
+  "app/models/user.rb",
+  "app/models/federated_actor.rb",
+  "db/schema.rb"
+]
+dependencies = ["PostgreSQL (check constraints)", "Rails 8 (model generator)"]

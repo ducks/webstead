@@ -1,0 +1,74 @@
+order = 14
+what = "Implement /.well-known/webfinger endpoint for ActivityPub actor discovery"
+why = "Webfinger is the standard protocol for discovering ActivityPub actors - when a Mastodon user wants to follow alice@webstead.dev, Mastodon queries /.well-known/webfinger?resource=acct:alice@webstead.dev to find Alice's Actor URI. Without this endpoint, federation won't work because remote servers won't know where to find your users' ActivityPub profiles."
+
+how = """
+Step-by-step implementation plan:
+
+1. Add Webfinger route to config/routes.rb:
+   get '/.well-known/webfinger', to: 'webfinger#show', defaults: { format: :json }
+   - Must respond at exact path (no subdomain routing needed, goes to main app)
+   - Constrain to JSON format for consistency
+
+2. Create app/controllers/webfinger_controller.rb:
+   - Define show action that extracts 'resource' param (acct:username@domain)
+   - Parse resource to extract username and domain
+   - Validate format matches acct:username@domain pattern (return 400 if invalid)
+   - Find webstead by username: Webstead.find_by(subdomain: username)
+   - Return 404 if webstead not found
+   - Build JRD (JSON Resource Descriptor) response with links array
+   - Include self link: { rel: 'self', type: 'application/activity+json', href: actor_url }
+   - actor_url should be: https://#{webstead.subdomain}.#{request.domain}/actor
+   - Set Content-Type: application/jrd+json
+   - Return JSON with status 200
+
+3. Add helper method to build Webfinger response:
+   - Define private method webfinger_response(webstead) in controller
+   - Returns hash: { subject: "acct:#{subdomain}@#{domain}", links: [...] }
+   - Links should include: self (ActivityPub actor), profile-page (webstead homepage)
+   - Example link: { rel: 'self', type: 'application/activity+json', href: actor_url(webstead) }
+   - Example link: { rel: 'http://webfinger.net/rel/profile-page', type: 'text/html', href: webstead_url(webstead) }
+
+4. Add actor_url helper to Webstead model or ApplicationHelper:
+   - Returns: "https://#{webstead.subdomain}.#{Rails.configuration.x.base_domain}/actor"
+   - Use same domain logic as subdomain routing (from step 3)
+   - Cache base_domain in Rails config or ENV var (e.g., ENV['BASE_DOMAIN'] || 'webstead.dev')
+
+5. Write request spec at spec/requests/webfinger_spec.rb:
+   - Test valid query: resource=acct:alice@webstead.dev returns 200 with JRD
+   - Verify subject matches acct:username@domain
+   - Verify links array contains self link with application/activity+json
+   - Verify self link href points to correct actor URL
+   - Test missing resource param returns 400
+   - Test malformed resource (not acct: format) returns 400
+   - Test nonexistent username returns 404
+   - Test case-insensitive username lookup (Alice vs alice)
+   - Verify Content-Type is application/jrd+json
+
+6. Test with curl manually:
+   - curl 'http://localhost:3000/.well-known/webfinger?resource=acct:alice@webstead.test'
+   - Verify JSON response matches expected JRD format
+   - Verify actor URL is correct and uses subdomain
+   - Test from Mastodon dev instance if available (full federation test)
+
+7. Add CORS headers for federation compatibility:
+   - Remote servers need to query webfinger from different origins
+   - Add Access-Control-Allow-Origin: * to webfinger response
+   - Add Access-Control-Allow-Methods: GET
+   - Consider using rack-cors gem or manual headers in controller
+"""
+
+backup = "If JRD format proves incompatible with some ActivityPub servers, fall back to WebFinger XML format (application/xrd+xml) with equivalent link elements. Most modern implementations use JSON but older servers may require XML. Alternatively, detect Accept header and serve both formats."
+
+[context]
+files = [
+  "config/routes.rb",
+  "app/controllers/webfinger_controller.rb",
+  "app/models/webstead.rb",
+  "spec/requests/webfinger_spec.rb"
+]
+dependencies = [
+  "rack-cors (optional, for CORS headers)",
+  "RFC 7033 (Webfinger spec)",
+  "ActivityPub spec (for actor discovery flow)"
+]

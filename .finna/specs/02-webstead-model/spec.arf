@@ -1,0 +1,21 @@
+I've written a detailed spec for the Webstead model step. The spec includes:
+
+**What**: Creating the core tenant model with subdomain routing, ownership, and settings storage.
+
+**Why**: This is the central entity representing each user's personal site. It must enforce subdomain uniqueness, support custom domains, and store site-specific configuration.
+
+**How** (8 detailed steps):
+1. Generate migration with references, unique subdomain, custom domain, and jsonb settings
+2. Add database constraints (NOT NULL, unique indexes, CHECK constraints for format/length)
+3. Model validations (presence, uniqueness, format, length, exclusion of reserved names)
+4. Define reserved subdomains constant (www, api, admin, etc.)
+5. Settings accessors using `store_accessor` for jsonb column
+6. Helper methods (`primary_domain`, `url`, `to_param`)
+7. Comprehensive test coverage
+8. Run migration and verify schema
+
+**Backup**: Fallback strategies if CHECK constraints or jsonb cause compatibility issues.
+
+**Context**: Lists relevant files and dependencies (PostgreSQL 12+, Rails 8+, User model).
+
+The spec follows the TOML format and provides actionable implementation details without being overly prescriptive.

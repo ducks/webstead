@@ -1,0 +1,104 @@
+order = 20
+what = "Add comprehensive error handling, validation, loading states, and polish subdomain isolation"
+why = "MVP needs production-ready error handling to prevent silent failures, clear validation messages for user feedback, loading states for async operations, and rock-solid subdomain isolation to prevent data leakage between tenants"
+
+how = """
+Step-by-step implementation plan:
+
+1. **Subdomain Isolation Hardening**
+   - Add `before_action :require_webstead!` to ApplicationController that raises if Current.webstead is nil
+   - Add integration tests that verify cross-tenant data access fails (try to access Post from wrong subdomain)
+   - Add spec that verifies subdomain routing fails gracefully for non-existent websteads
+   - Add database constraint to ensure all tenant models have webstead_id NOT NULL
+   - Add database indices on webstead_id for all tenant tables (posts, comments, federated_actors)
+
+2. **Model Validations & Error Messages**
+   - Add presence, length, and format validations to Webstead model (subdomain: alphanumeric/hyphen only, 3-63 chars, reserved names)
+   - Add presence and length validations to Post model (title, body)
+   - Add presence validation to Comment model (body, webstead_id)
+   - Add uniqueness validation to FederatedActor (actor_uri scoped to webstead_id)
+   - Add custom error messages for all validations (user-friendly text)
+   - Add validation specs for all models testing edge cases
+
+3. **Controller Error Handling**
+   - Wrap WebsteadsController#create in begin/rescue to handle validation errors, return flash message
+   - Wrap PostsController actions in begin/rescue to handle not found, validation errors
+   - Wrap CommentsController#create in begin/rescue for validation errors
+   - Add rescue_from ActiveRecord::RecordNotFound to ApplicationController with 404 rendering
+   - Add rescue_from ActiveRecord::RecordInvalid with flash error and redirect
+   - Add logging for all rescued exceptions (Rails.logger.error with context)
+
+4. **Loading States (Turbo Frames)**
+   - Add turbo-frame with loading="lazy" to post list on webstead show page
+   - Add <turbo-frame id="loading-indicator"> with spinner/text to layouts
+   - Add data-turbo-submits-with attribute to all form submit buttons to show "Creating..." state
+   - Add Turbo Stream response to CommentsController#create for optimistic UI update
+   - Test loading states manually with slow network throttling in browser
+
+5. **Validation Feedback UI**
+   - Add form error rendering helper that shows model.errors.full_messages
+   - Style error messages with red text and border on invalid fields
+   - Add inline validation error display next to form fields
+   - Add flash message styling (success=green, error=red, notice=blue)
+   - Ensure errors persist across Turbo Frame updates
+
+6. **Basic Styling Polish**
+   - Add consistent spacing/padding to all pages using Tailwind utilities
+   - Style forms with proper labels, input borders, focus states
+   - Add hover states to buttons and links
+   - Add basic responsive layout (mobile-first, works on narrow screens)
+   - Add header/footer with consistent navigation
+   - Style post/comment threading with indentation and connecting lines
+   - Ensure markdown rendering has decent typography (headings, lists, code blocks)
+
+7. **Reserved Subdomain Protection**
+   - Add RESERVED_SUBDOMAINS constant to Webstead model (www, api, admin, app, mail, ftp, etc.)
+   - Add validation that prevents creating websteads with reserved names
+   - Add test coverage for reserved names
+   - Document reserved names in validation error message
+
+8. **Integration Tests for Happy & Sad Paths**
+   - Add system spec for successful webstead creation flow
+   - Add system spec for failed webstead creation (duplicate subdomain, invalid chars)
+   - Add system spec for successful post creation and viewing
+   - Add system spec for failed post creation (missing title)
+   - Add system spec for comment threading with nested replies
+   - Add system spec that verifies subdomain isolation (visit post on wrong subdomain returns 404)
+
+9. **Logging & Monitoring Hooks**
+   - Add logging for webstead creation (subdomain, user info)
+   - Add logging for post/comment creation (webstead context)
+   - Add logging for subdomain routing failures
+   - Add logging for validation failures with model details
+   - Ensure all logs include webstead_id for filtering/debugging
+"""
+
+backup = "If Turbo Frame loading states prove complex, fall back to simple CSS spinners on buttons. If subdomain isolation tests fail, add explicit webstead_id checks to all queries. If validation UI is too complex, start with simple flash messages only and iterate."
+
+[context]
+files = [
+  "app/models/webstead.rb",
+  "app/models/post.rb",
+  "app/models/comment.rb",
+  "app/models/federated_actor.rb",
+  "app/controllers/application_controller.rb",
+  "app/controllers/websteads_controller.rb",
+  "app/controllers/posts_controller.rb",
+  "app/controllers/comments_controller.rb",
+  "app/views/layouts/application.html.erb",
+  "app/views/websteads/show.html.erb",
+  "app/views/posts/show.html.erb",
+  "spec/models/webstead_spec.rb",
+  "spec/models/post_spec.rb",
+  "spec/models/comment_spec.rb",
+  "spec/system/subdomain_isolation_spec.rb",
+  "spec/system/post_creation_spec.rb",
+  "db/migrate/*_add_indices_to_tenant_tables.rb",
+  "config/routes.rb"
+]
+dependencies = [
+  "Rails 8 rescue_from error handling",
+  "Turbo Frame loading states and Turbo Stream responses",
+  "Tailwind CSS for styling polish",
+  "RSpec system tests with Capybara for integration testing"
+]

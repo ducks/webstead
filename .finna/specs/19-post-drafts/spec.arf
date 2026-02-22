@@ -1,0 +1,24 @@
+order = 19
+what = "Add draft/published state to posts with UI for managing drafts and publish action that triggers federation"
+why = "Users need to preview and edit content before broadcasting to the fediverse. Publishing should be intentional since ActivityPub posts federate immediately and can't be easily recalled. Draft state also prevents incomplete posts from appearing on public profiles."
+how = """
+Step-by-step implementation plan:
+
+1. Add published state to Post model
+   - Generate migration: `rails g migration AddPublishedToPosts published:boolean default:false`
+   - Add index on `published` for efficient queries: `add_index :posts, :published`
+   - Add index on `[webstead_id, published, created_at]` for listing published posts
+   - Add validation: `validates :published, inclusion: { in: [true, false] }`
+   - Add scope: `scope :published, -> { where(published: true) }`
+   - Add scope: `scope :drafts, -> { where(published: false) }`
+
+2. Update PostsController actions
+   - Modify `index` to show drafts when viewing own webstead: `@posts = current_webstead? ? webstead.posts : webstead.posts.published`
+   - Modify `show` to allow owner to view drafts: `@post.published? || current_webstead?`
+   - Add authorization check: `return head :forbidden unless @post.published? || current_webstead?`
+   - Keep `create` defaulting to `published: false` (drafts by default)
+
+3. Add publish action to PostsController
+   - Add route: `resources :posts do; member do; post :publish; end; end`
+   - Add controller action that checks authorization, updates published state, enqueues federation job
+   - Return turbo_stream response to update UI without full page reload

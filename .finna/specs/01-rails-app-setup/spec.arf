@@ -1,0 +1,64 @@
+order = 1
+what = "Initialize Rails 8 application with PostgreSQL, Hotwire, Tailwind CSS, and essential gems"
+why = "Rails 8 provides modern foundation with built-in Hotwire/Turbo for reactive UI without complex JavaScript frameworks. PostgreSQL enables multi-tenancy via schemas and handles JSONB for ActivityPub objects. Tailwind gives utility-first styling for rapid UI iteration."
+
+how = """
+Step-by-step implementation plan:
+
+1. Create new Rails 8 app with PostgreSQL
+   - Run: `rails new webstead --database=postgresql --css=tailwind`
+   - Skip default test framework (add RSpec later)
+   - Includes Hotwire (Turbo + Stimulus) by default in Rails 8
+
+2. Initialize git repository
+   - cd webstead
+   - git init
+   - Create .gitignore with: log/*, tmp/*, .env, .DS_Store
+   - Initial commit: "Initial Rails 8 app with PostgreSQL and Tailwind"
+
+3. Configure PostgreSQL for development
+   - Update config/database.yml with local PostgreSQL settings
+   - Create databases: `rails db:create`
+   - Test connection: `rails db:migrate` (should succeed even with no migrations)
+
+4. Add essential gems to Gemfile
+   - Production: `pg`, `puma`, `redis` (for ActionCable/Turbo Streams)
+   - Development: `debug`, `pry-rails`, `annotate`, `rubocop-rails`
+   - Testing: `rspec-rails`, `factory_bot_rails`, `faker`
+   - Multi-tenancy: `apartment` gem for PostgreSQL schema isolation
+   - Federation: `http` gem for ActivityPub HTTP signatures
+   - Run: `bundle install`
+
+5. Configure development environment
+   - Set up .env file with DATABASE_URL, REDIS_URL
+   - Add dotenv-rails gem for environment variable management
+   - Configure Rails logger to show SQL queries in development
+
+6. Verify setup works
+   - Start Rails server: `rails server`
+   - Visit http://localhost:3000 - should see Rails welcome page
+   - Check logs for no errors
+   - Verify Tailwind compiles: check public/assets/tailwind-*.css
+
+7. Create shell.nix for reproducible environment
+   - Include: Ruby 3.3, PostgreSQL 16, Redis, Node.js 22
+   - Add shellHook with setup instructions
+   - Document all system dependencies
+"""
+
+backup = "If Rails 8 has issues, use Rails 7.2 with importmap-rails instead of Hotwire. If apartment gem causes problems, implement schema-based multi-tenancy manually using ActiveRecord::Base.connection.schema_search_path."
+
+[context]
+files = [
+    "Gemfile",
+    "config/database.yml",
+    "config/environments/development.rb",
+    "shell.nix"
+]
+dependencies = [
+    "Ruby 3.3+",
+    "PostgreSQL 16+",
+    "Redis 7+",
+    "Node.js 22+ (for Tailwind CLI)",
+    "Nix (for shell.nix environment)"
+]
