@@ -1,9 +1,9 @@
 class PostsController < ApplicationController
   include TenantScoped
-  
-  before_action :authenticate_user!, except: [:index, :show]
-  before_action :set_post, only: [:show, :edit, :update]
-  before_action :authorize_post_owner!, only: [:edit, :update]
+
+  before_action :authenticate_user!, except: [ :index, :show ]
+  before_action :set_post, only: [ :show, :edit, :update ]
+  before_action :authorize_post_owner!, only: [ :edit, :update ]
 
   def index
     @posts = Current.webstead.posts.published.recent
@@ -29,7 +29,7 @@ class PostsController < ApplicationController
     @post = Current.webstead.posts.build(post_params)
     # TODO: Set user when authentication is implemented (step 17)
     # @post.user = current_user
-    
+
     if @post.save
       redirect_to @post, notice: "Post was successfully created."
     else

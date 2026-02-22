@@ -10,7 +10,7 @@ class CreatePosts < ActiveRecord::Migration[8.0]
       t.timestamps
     end
 
-    add_index :posts, [:webstead_id, :published_at]
-    add_index :posts, [:webstead_id, :created_at]
+    add_index :posts, [ :webstead_id, :published_at ]
+    add_index :posts, [ :webstead_id, :created_at ]
   end
 end
