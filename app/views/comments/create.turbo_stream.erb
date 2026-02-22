@@ -1,0 +1,13 @@
+<%= turbo_stream.append dom_id(@parent, :comments) do %>
+  <%= render partial: "comments/comment", locals: { comment: @comment } %>
+<% end %>
+
+<%= turbo_stream.replace "comment_form_#{dom_id(@parent)}" do %>
+  <%= render partial: "comments/form", locals: { parent: @parent, comment: Comment.new } %>
+<% end %>
+
+<%= turbo_stream.update "flash" do %>
+  <div class="p-4 mb-4 text-sm text-green-700 bg-green-100 rounded">
+    Comment posted successfully!
+  </div>
+<% end %>
