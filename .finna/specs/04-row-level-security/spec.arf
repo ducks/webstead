@@ -1,70 +1,111 @@
 order = 4
-what = "Add tenant isolation columns, indexes, and request-scoped Current pattern for secure multi-tenancy"
-why = "Ensures complete data isolation between websteads at the database level. The Current.webstead pattern provides request-scoped tenant context throughout the application stack, preventing accidental cross-tenant data leaks. Foreign key constraints and indexes ensure referential integrity and query performance for tenant-scoped queries."
-
+what = "Add tenant isolation to posts and comments via webstead_id foreign keys and Current.webstead pattern"
+why = "Enforce data isolation at database and application levels to prevent cross-tenant data leaks. Every post and comment must belong to exactly one webstead, and queries must automatically scope to current webstead. This is critical for security in multi-tenant architecture."
 how = """
 Step-by-step implementation plan:
 
-1. Generate migration for tenant isolation columns:
-   - `rails g migration AddWebsteadIdToPostsAndComments`
-   - Add `webstead_id:bigint` to `posts` table (NOT NULL)
-   - Add `webstead_id:bigint` to `comments` table (NOT NULL)
-   - Add foreign key constraints: `add_foreign_key :posts, :websteads` and `add_foreign_key :comments, :websteads`
-   - Add composite indexes: `add_index :posts, [:webstead_id, :created_at]` and `add_index :comments, [:webstead_id, :post_id]`
-   - Add unique constraint for slug scoping: `add_index :posts, [:webstead_id, :slug], unique: true`
+1. Generate migration to add webstead_id to posts table
+   - rails generate migration AddWebsteadIdToPosts webstead_id:references
+   - Edit migration to add NOT NULL constraint and index
+   - Add foreign key constraint with ON DELETE CASCADE
+   - Run rails db:migrate
 
-2. Update models with tenant associations and default scopes:
-   - In `app/models/post.rb`: add `belongs_to :webstead` and `default_scope { where(webstead_id: Current.webstead&.id) }`
-   - In `app/models/comment.rb`: add `belongs_to :webstead` and `default_scope { where(webstead_id: Current.webstead&.id) }`
-   - Add validation: `validates :webstead_id, presence: true` to both models
-   - Add before_create callback to auto-set webstead_id: `before_create :set_webstead_id` with `def set_webstead_id; self.webstead_id ||= Current.webstead&.id; end`
+2. Generate migration to add webstead_id to comments table
+   - rails generate migration AddWebsteadIdToComments webstead_id:references
+   - Edit migration to add NOT NULL constraint and index
+   - Add foreign key constraint with ON DELETE CASCADE
+   - Run rails db:migrate
 
-3. Implement Current.webstead pattern:
-   - Create `app/models/current.rb` inheriting from `ActiveSupport::CurrentAttributes`
-   - Add attribute: `attribute :webstead`
-   - Add helper method: `def webstead_id; webstead&.id; end`
-   - This provides thread-safe, request-scoped storage for current tenant
+3. Update Post model to belong to webstead
+   - Add: belongs_to :webstead
+   - Add validation: validates :webstead_id, presence: true
+   - Add default scope: default_scope { where(webstead_id: Current.webstead&.id) if Current.webstead }
+   - Add callback: before_validation :set_webstead_id, on: :create
+   - Implement set_webstead_id method to assign Current.webstead.id
 
-4. Add tenant resolution in ApplicationController:
-   - Create `app/controllers/concerns/tenant_scoped.rb` module
-   - Implement `set_current_webstead` method that:
-     - Extracts subdomain from `request.host`
-     - Queries `Webstead.find_by!(subdomain: subdomain)` (raises 404 if not found)
-     - Sets `Current.webstead = webstead`
-   - Add `before_action :set_current_webstead` in module
-   - Include `TenantScoped` in `ApplicationController`
+4. Update Comment model to belong to webstead
+   - Add: belongs_to :webstead
+   - Add validation: validates :webstead_id, presence: true
+   - Add default scope: where(webstead_id: Current.webstead&.id) if Current.webstead
+   - Add callback: before_validation :set_webstead_id, on: :create
+   - Implement set_webstead_id method
 
-5. Add database-level check constraints (defense in depth):
-   - Generate migration: `rails g migration AddTenantCheckConstraints`
-   - Add check constraint: `execute "ALTER TABLE posts ADD CONSTRAINT posts_webstead_id_check CHECK (webstead_id IS NOT NULL)"`
-   - Add check constraint: `execute "ALTER TABLE comments ADD CONSTRAINT comments_webstead_id_check CHECK (webstead_id IS NOT NULL)"`
-   - These prevent NULL webstead_id at the database level even if Rails validations are bypassed
+5. Create Current.webstead pattern in ApplicationController
+   - Add before_action :set_current_webstead
+   - Implement set_current_webstead method:
+     - Extract subdomain from request.subdomain or custom domain from request.host
+     - Find webstead by subdomain or custom_domain
+     - Set Current.webstead = found webstead
+     - Return 404 if webstead not found
 
-6. Update existing controllers to verify tenant context:
-   - In `PostsController` and `CommentsController`, queries automatically scoped via `default_scope`
-   - Explicitly use `Current.webstead.posts` instead of `Post.all` for clarity and intent
-   - Add spec to verify cross-tenant access raises `ActiveRecord::RecordNotFound`
+6. Create app/models/current.rb if it doesn't exist
+   - Define Current class inheriting from ActiveSupport::CurrentAttributes
+   - Add attribute :webstead
 
-7. Add test coverage for tenant isolation:
-   - In `spec/models/post_spec.rb`: test that `Post.all` only returns posts for `Current.webstead`
-   - Test that creating post without `Current.webstead` set fails validation
-   - Test that manually setting wrong `webstead_id` fails foreign key constraint
-   - In `spec/requests/posts_spec.rb`: test that subdomain routing sets correct `Current.webstead`
-   - Test that accessing posts from different subdomain returns 404
+7. Update Post model associations
+   - Add: has_many :posts, dependent: :destroy to Webstead model
+   - Verify cascading delete works (deleting webstead deletes all posts)
+
+8. Update Comment model associations
+   - Add: has_many :comments, dependent: :destroy to Webstead model
+   - Verify cascading delete works
+
+9. Add compound indexes for common queries
+   - Add index on [webstead_id, status] for posts (query by published/draft)
+   - Add index on [webstead_id, post_id] for comments (query comments by post)
+   - Add index on [webstead_id, parent_id] for comments (query nested replies)
+
+10. Write model tests for tenant isolation
+    - Test Post.create automatically assigns Current.webstead.id
+    - Test Post.all only returns posts for Current.webstead
+    - Test Comment.create automatically assigns webstead_id
+    - Test Comment.where(post_id: X) scopes to Current.webstead
+    - Test querying across websteads fails (returns empty when Current.webstead changed)
+
+11. Write controller integration tests
+    - Test subdomain routing sets correct Current.webstead
+    - Test custom domain routing sets correct Current.webstead
+    - Test requests to nonexistent webstead return 404
+    - Test posts from webstead A not visible when accessing webstead B
+
+12. Validate migration rollback works
+    - rails db:rollback should cleanly remove webstead_id columns
+    - Verify foreign key constraints are dropped on rollback
 """
+backup = """
+If Current.webstead pattern causes issues or breaks existing functionality:
 
-backup = "If default_scope causes issues with admin/background jobs (common problem), remove default_scope and instead use explicit scoping everywhere: replace model queries with `Current.webstead.posts` and `Current.webstead.comments`. Add Rubocop rule to enforce scoped queries. For background jobs that need to operate across tenants, wrap job execution in `Current.set(webstead: webstead) { ... }` block."
+1. Use explicit webstead_id passing instead of Current
+   - Add webstead_id parameter to controller actions
+   - Pass webstead from controller to model explicitly
+   - Scope queries manually: Post.where(webstead_id: @webstead.id)
+   - More verbose but more explicit, easier to debug
+
+2. If default_scope causes problems (can interfere with associations):
+   - Remove default_scope from models
+   - Create explicit scope: scope :for_webstead, ->(webstead) { where(webstead_id: webstead.id) }
+   - Use scope in controllers: @posts = Post.for_webstead(Current.webstead).published
+   - More control, no magic behavior
+
+3. If callbacks fail to set webstead_id:
+   - Set webstead_id explicitly in controllers instead of callbacks
+   - @post = Current.webstead.posts.build(post_params)
+   - Ensures webstead_id is always set via association
+"""
 
 [context]
 files = [
-  "app/models/webstead.rb",
-  "app/models/post.rb", 
+  "app/models/post.rb",
   "app/models/comment.rb",
+  "app/models/webstead.rb",
+  "app/models/current.rb",
   "app/controllers/application_controller.rb",
-  "config/routes.rb",
-  "db/schema.rb"
+  "db/migrate/*_add_webstead_id_to_posts.rb",
+  "db/migrate/*_add_webstead_id_to_comments.rb"
 ]
 dependencies = [
-  "rails ~> 8.0",
-  "pg (PostgreSQL with foreign key and check constraint support)"
+  "Rails 8 ActiveSupport::CurrentAttributes",
+  "PostgreSQL foreign key constraints",
+  "Rails default_scope (careful with associations)",
+  "Request object for subdomain/host extraction"
 ]

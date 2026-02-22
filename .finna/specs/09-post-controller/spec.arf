@@ -1,107 +1,128 @@
 order = 9
-what = "Implement PostsController with CRUD actions and authentication stubs"
-why = "Enable basic post management (list, view, create, edit) through web interface. Authentication gates ensure actions require login but defer actual auth implementation to later step. This unblocks frontend work while keeping security boundaries clear."
+what = "Implement PostsController with CRUD actions and basic authentication gates for managing posts within tenant scope"
+why = "Users need to view published posts (index/show) and authenticated users need to create/edit their posts. This controller provides the core interaction layer for the Post model. Authentication gates are added as placeholders for the full auth system coming in step 11, allowing us to build the controller structure now and plug in real auth later."
 
 how = """
 Step-by-step implementation plan:
 
-1. Generate PostsController with Rails scaffold
-   - `rails g controller Posts index show new edit create update`
-   - Remove scaffold CSS/JS if generated (using Tailwind)
-   - Controller lives at `app/controllers/posts_controller.rb`
+1. Generate the PostsController
+   - Run: rails g controller Posts index show new create edit update
+   - This creates: app/controllers/posts_controller.rb, views directory, routes
+   - Remove generated routes (we'll add custom ones)
 
-2. Implement index action
-   - Scope to Current.webstead.posts
-   - Eager load author (user) to avoid N+1
-   - Order by created_at DESC (newest first)
-   - Use `@posts = Current.webstead.posts.includes(:user).order(created_at: :desc)`
-   - Paginate with `pagy` gem if needed (or leave for later optimization)
+2. Add routes to config/routes.rb
+   - Add: resources :posts, only: [:index, :show, :new, :create, :edit, :update]
+   - These are scoped to the current webstead via subdomain routing (already set up in step 3)
 
-3. Implement show action
-   - Find post scoped to Current.webstead: `@post = Current.webstead.posts.find(params[:id])`
-   - Raises ActiveRecord::RecordNotFound if post belongs to different webstead (tenant isolation)
-   - Later will add comment loading here
+3. Implement PostsController#index
+   - Load all published posts for current webstead: @posts = Post.published.order(published_at: :desc)
+   - Uses TenantScoped concern (step 10) for automatic tenant filtering
+   - Only shows published posts (draft posts excluded for now)
 
-4. Implement new action
-   - Add authentication stub: `authenticate_user!` before_action
-   - Create empty post: `@post = Current.webstead.posts.build`
-   - Renders form at `app/views/posts/new.html.erb`
+4. Implement PostsController#show
+   - Load post: @post = Post.published.find_by!(slug: params[:id])
+   - Uses slug instead of id for clean URLs (/posts/my-post-title)
+   - Raise 404 if not found or not published
+   - Load comments for display: @comments = @post.comments.includes(:federated_actor).root_level.order(created_at: :asc)
 
-5. Implement create action
-   - Add authentication stub: `authenticate_user!` before_action
-   - Build post scoped to webstead and current user
-   - `@post = Current.webstead.posts.build(post_params.merge(user: current_user))`
-   - Set status to 'draft' by default
-   - On success: redirect to post with notice
-   - On failure: render :new with errors
+5. Implement PostsController#new (authentication required)
+   - Add before_action: before_action :require_authentication, only: [:new, :create, :edit, :update]
+   - Initialize new post: @post = Post.new
+   - This is a placeholder - real auth comes in step 11
 
-6. Implement edit action
-   - Add authentication stub: `authenticate_user!` before_action
-   - Find post: `@post = Current.webstead.posts.find(params[:id])`
-   - Add authorization check: `authorize_post_owner!(@post)`
-   - Renders form at `app/views/posts/edit.html.erb`
+6. Implement PostsController#create (authentication required)
+   - Strong params: post_params = params.require(:post).permit(:title, :body, :status)
+   - Create post: @post = Post.new(post_params)
+   - Set current user when auth exists: @post.user = current_user (will be nil for now)
+   - Handle save success: redirect to post_path(@post), notice: "Post created"
+   - Handle save failure: render :new, status: :unprocessable_entity
 
-7. Implement update action
-   - Add authentication stub: `authenticate_user!` before_action
-   - Find post and check ownership
-   - Update with `@post.update(post_params)`
-   - On success: redirect to post with notice
-   - On failure: render :edit with errors
+7. Implement PostsController#edit (authentication required)
+   - Load post: @post = Post.find_by!(slug: params[:id])
+   - Add authorization check placeholder: raise "Unauthorized" unless @post.user == current_user (will be refined in step 11)
 
-8. Add strong parameters method
-   - `def post_params; params.require(:post).permit(:title, :slug, :content, :status); end`
-   - Only allow title, slug, content, status
-   - webstead_id and user_id set by controller (never from params)
+8. Implement PostsController#update (authentication required)
+   - Load post: @post = Post.find_by!(slug: params[:id])
+   - Authorization check: raise "Unauthorized" unless @post.user == current_user
+   - Update post: @post.update(post_params)
+   - Handle success: redirect to post_path(@post), notice: "Post updated"
+   - Handle failure: render :edit, status: :unprocessable_entity
 
-9. Stub authentication methods
-   - `def authenticate_user!; head :unauthorized unless current_user; end`
-   - `def current_user; @current_user ||= User.find_by(id: session[:user_id]); end`
-   - `helper_method :current_user` to make available in views
-   - Add comment: "# TODO: Replace with Rails 8 authentication (step 17)"
+9. Add authentication gate helper (placeholder for step 11)
+   - Define in ApplicationController: def require_authentication; raise "Authentication not yet implemented"; end
+   - Define: def current_user; nil; end (placeholder)
+   - These will be replaced with real Rails 8 authentication in step 11
 
-10. Add authorization helper
-    - `def authorize_post_owner!(post); head :forbidden unless post.user == current_user; end`
-    - Simple ownership check until proper authorization added
-    - Returns 403 Forbidden if user doesn't own post
+10. Add strong parameters helper
+    - Define private method: def post_params
+    - Permit: params.require(:post).permit(:title, :body, :status)
+    - Status allows draft/published/scheduled values
 
-11. Configure routes in config/routes.rb
-    - Nest posts under webstead constraint
-    - `resources :posts, only: [:index, :show, :new, :create, :edit, :update]`
-    - Delete action deferred (soft-delete with status='archived' later)
-    - Routes respect webstead subdomain via constraint from step 2
+11. Test the controller manually
+    - Start rails server: bin/rails s
+    - Visit: http://test.localhost:3000/posts (should show published posts)
+    - Visit: http://test.localhost:3000/posts/some-slug (should show post)
+    - Try: http://test.localhost:3000/posts/new (should raise authentication error)
+    - Verify tenant isolation: switch subdomain, posts should be different
 
-12. Add basic integration test
-    - `test/controllers/posts_controller_test.rb`
-    - Test index loads webstead's posts only (tenant isolation)
-    - Test show raises RecordNotFound for other webstead's posts
-    - Test create requires authentication (returns 401 without session)
-    - Test update requires ownership (returns 403 for other user's post)
-    - Use fixtures or FactoryBot for test data
+12. Add basic error handling
+    - Handle ActiveRecord::RecordNotFound: rescue_from in ApplicationController
+    - Render 404 page for missing posts
+    - Handle authorization errors gracefully (will be refined in step 11)
 
-13. Test in browser
-    - Start Rails: `bin/rails server`
-    - Visit subdomain posts index: `http://alice.webstead.test:3000/posts`
-    - Should see empty state or posts list
-    - Try creating post without auth: should return 401
-    - Set session[:user_id] in console and retry: should work
+13. Verify integration with existing models
+    - PostsController uses Post model from step 4 (validates presence, generates slug)
+    - TenantScoped concern from step 10 automatically filters by Current.webstead
+    - Comments loaded via association defined in step 5
 """
 
-backup = "If authentication stubs cause issues, use `skip_before_action :authenticate_user!` on index/show actions and add `if: -> { action_name.in?(%w[new create edit update]) }` to the before_action. This allows public read access while gating writes."
+backup = """
+If the generated controller has issues:
+
+1. Create controller manually
+   - Create file: app/controllers/posts_controller.rb
+   - Inherit from ApplicationController
+   - Define each action manually (index, show, new, create, edit, update)
+
+2. If slug-based routing doesn't work
+   - Fall back to numeric IDs: Post.find(params[:id])
+   - Add to_param override to Post model: def to_param; slug; end
+   - This makes Rails use slug automatically in URL helpers
+
+3. If tenant scoping doesn't work automatically
+   - Add explicit scoping in each action: Current.webstead.posts.published
+   - Double-check Current.webstead is set by SubdomainRouter middleware (step 3)
+
+4. If authentication gates cause issues during testing
+   - Skip authentication temporarily: skip_before_action :require_authentication
+   - Or stub current_user in console: ApplicationController.class_eval { def current_user; User.first; end }
+   - Remove stubs after step 11 implements real auth
+
+5. If views are missing from generated controller
+   - Create manually: app/views/posts/index.html.erb, show.html.erb, new.html.erb, edit.html.erb
+   - Use existing view code from step 8 (basic-views) as starting point
+"""
 
 [context]
 files = [
   "app/controllers/posts_controller.rb",
+  "app/controllers/application_controller.rb",
   "app/models/post.rb",
-  "app/models/webstead.rb",
-  "app/controllers/concerns/webstead_scoped.rb",
+  "app/models/concerns/tenant_scoped.rb",
   "config/routes.rb",
-  "test/controllers/posts_controller_test.rb"
+  "app/views/posts/index.html.erb",
+  "app/views/posts/show.html.erb",
+  "app/views/posts/new.html.erb",
+  "app/views/posts/edit.html.erb"
 ]
 
 dependencies = [
-  "Current.webstead set by WebsteadScoped concern (step 2)",
-  "Post model with webstead_id and user_id (step 4)",
-  "User model exists (step 4)",
-  "Subdomain routing configured (step 2)",
-  "Markdown rendering can be stubbed (step 8) or deferred to views"
+  "Rails 8 routing (resources helper)",
+  "Strong parameters (params.require.permit)",
+  "ActiveRecord query interface (Post.published.order)",
+  "Rails rescue_from for error handling",
+  "TenantScoped concern from step 10",
+  "Post model from step 4",
+  "Comment model from step 5",
+  "SubdomainRouter middleware from step 3"
 ]

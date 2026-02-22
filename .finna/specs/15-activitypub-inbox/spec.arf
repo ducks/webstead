@@ -1,0 +1,131 @@
+order = 15
+what = "Create ActivityPub inbox controller to accept Follow activities and return Accept responses"
+why = "Allows Mastodon users to follow webstead actors. This is the receiving half of the Follow/Accept handshake. Without this, users can't subscribe to webstead content on their fediverse clients. For v1, we only support Follow (to build follower list for post delivery) and reject everything else with 501 Not Implemented."
+how = """
+Step-by-step implementation plan:
+
+1. Create ActivityPub::InboxController at app/controllers/activitypub/inbox_controller.rb
+   - Route: POST /users/:username/inbox (shared inbox comes later)
+   - before_action to verify HTTP Signatures on all requests (security critical)
+   - before_action to parse JSON-LD activity from request body
+   - before_action to load target webstead user from :username param
+
+2. Add inbox route to config/routes.rb
+   - namespace :activitypub do
+   -   post '/users/:username/inbox', to: 'inbox#create'
+   - end
+   - This matches ActivityPub spec: actor inbox at /users/:username/inbox
+
+3. Implement HTTP Signature verification in before_action :verify_signature
+   - Extract Signature header (format: keyId="...",headers="...",signature="...")
+   - Parse keyId to get remote actor URI
+   - Fetch remote actor document (with caching, 24h TTL)
+   - Extract publicKey.publicKeyPem from actor JSON-LD
+   - Reconstruct signing string from headers list (typically: (request-target) host date)
+   - Verify signature using OpenSSL::PKey::RSA and public key
+   - Return 401 Unauthorized if signature invalid
+   - Return 400 Bad Request if Signature header missing or malformed
+
+4. Implement activity parsing in before_action :parse_activity
+   - Parse request.body as JSON
+   - Validate required fields: @context, type, actor, object
+   - Store parsed activity in @activity instance variable
+   - Return 400 Bad Request if JSON invalid or missing required fields
+
+5. Implement create action to handle Follow activities
+   - Check @activity['type'] == 'Follow'
+   - If Follow:
+     - Extract actor URI from @activity['actor']
+     - Extract object URI from @activity['object'] (should match local user)
+     - Verify object matches current user's actor URI
+     - Find or create FederatedActor record for follower (actor_uri, fetch full actor doc)
+     - Create Follower record: follower.create!(webstead: @webstead, federated_actor: actor, status: 'accepted')
+     - Generate Accept activity response (JSON-LD format)
+     - Deliver Accept activity to actor's inbox (background job)
+     - Return 202 Accepted with empty body (delivery happens async)
+   - If not Follow:
+     - Return 501 Not Implemented with JSON: {"error": "Activity type not supported in v1"}
+   - Supported types for v1: ["Follow"] only
+   - Planned for v2: ["Undo", "Delete", "Like", "Announce"] (not implemented yet)
+
+6. Create Accept activity JSON-LD structure in private method build_accept_activity
+   - Format matches ActivityPub spec:
+   - {
+   -   "@context": "https://www.w3.org/ns/activitystreams",
+   -   "type": "Accept",
+   -   "id": "https://#{@webstead.primary_domain}/activities/#{SecureRandom.uuid}",
+   -   "actor": "https://#{@webstead.primary_domain}/users/#{@user.username}",
+   -   "object": @activity (the original Follow activity)
+   - }
+   - Use SecureRandom.uuid for unique activity ID
+   - Store activity ID in database for idempotency (activities table, future step)
+
+7. Create ActivityPub::DeliveryJob to send Accept activity
+   - Takes: activity JSON, recipient inbox URL, sender private key
+   - Generates HTTP Signature for POST request
+   - Posts JSON-LD to recipient inbox with signed headers
+   - Retries on failure (exponentially_longer with 3 attempts)
+   - Logs delivery success/failure
+   - Implementation details in separate step (activitypub-delivery-job)
+
+8. Add error handling for common failure cases
+   - Invalid signature: 401 Unauthorized
+   - Malformed JSON: 400 Bad Request
+   - Missing required fields: 400 Bad Request
+   - Actor fetch fails: 503 Service Unavailable (retry later)
+   - Duplicate follow: idempotent (return 202, don't create duplicate)
+   - Unknown activity type: 501 Not Implemented
+
+9. Create spec at spec/requests/activitypub/inbox_spec.rb
+   - Test successful Follow → Accept flow with valid signature
+   - Test duplicate Follow (idempotency)
+   - Test invalid signature (401)
+   - Test missing signature (400)
+   - Test malformed JSON (400)
+   - Test non-Follow activity (501 Not Implemented)
+   - Test signature verification with real RSA key pair
+   - Mock HTTP requests to fetch remote actor (use webmock)
+   - Verify Follower record created with correct attributes
+   - Verify Accept activity enqueued for delivery
+
+10. Test against real Mastodon instance
+    - Create test webstead account
+    - Follow from Mastodon account
+    - Verify Follow activity received at inbox
+    - Verify signature validates correctly
+    - Verify Accept activity sent back
+    - Verify follower shows up in Mastodon following list
+    - Check Mastodon server logs for any protocol errors
+"""
+backup = "If HTTP Signature verification is too complex to implement correctly, temporarily accept unsigned requests in development/test with a SKIP_SIGNATURE_VERIFICATION env var (never in production). Focus on getting the Follow/Accept flow working first, then add signature verification. Alternatively, use existing activitypub gem (https://github.com/krtierney/activitypub) if manual implementation proves too error-prone, though it may be overkill for announce-only v1."
+
+[context]
+files = [
+  "app/controllers/activitypub/inbox_controller.rb",
+  "config/routes.rb",
+  "app/models/follower.rb",
+  "app/models/federated_actor.rb",
+  "app/models/webstead.rb",
+  "app/models/user.rb",
+  "app/jobs/activitypub/delivery_job.rb",
+  "spec/requests/activitypub/inbox_spec.rb"
+]
+dependencies = [
+  "openssl (Ruby stdlib for signature verification)",
+  "net/http (for fetching remote actor documents)",
+  "sidekiq or rails active_job (for async delivery)",
+  "webmock (for mocking HTTP in tests)",
+  "local Mastodon instance for integration testing"
+]
+
+[test]
+strategy = "Request specs with signature verification, integration test against real Mastodon"
+validation = """
+1. Unit tests pass for Follow handling, signature verification, error cases
+2. Follow request from Mastodon creates Follower record
+3. Accept activity is delivered to follower inbox
+4. Follower appears in Mastodon following list
+5. Invalid signatures are rejected with 401
+6. Non-Follow activities return 501 Not Implemented
+7. Duplicate follows are idempotent (no duplicate records)
+"""

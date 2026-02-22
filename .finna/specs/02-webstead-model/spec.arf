@@ -1,21 +1,89 @@
-I've written a detailed spec for the Webstead model step. The spec includes:
+order = 2
+what = "Create Webstead tenant model with multi-domain support"
+why = "The Webstead model is the core tenant entity in the multi-tenant architecture. Each webstead represents one user's personal site and must support both subdomain routing (username.webstead.dev) and custom domain mapping. Strong validations prevent tenant isolation bugs, security issues (subdomain hijacking), and reserved namespace collisions. The settings jsonb column provides extensible configuration without schema migrations."
 
-**What**: Creating the core tenant model with subdomain routing, ownership, and settings storage.
+how = """
+Step-by-step implementation plan:
 
-**Why**: This is the central entity representing each user's personal site. It must enforce subdomain uniqueness, support custom domains, and store site-specific configuration.
+1. Generate the Webstead model and migration
+   - Run: bin/rails generate model Webstead user:references subdomain:string custom_domain:string settings:jsonb title:string description:text
+   - Migration should include: user_id (foreign key), subdomain (63 char limit), custom_domain (253 char limit), settings jsonb, title, description
+   - Set subdomain as NOT NULL, settings with default: {}
+   
+2. Add database indexes for performance and uniqueness
+   - Unique index on subdomain (tenant lookup from request.subdomain)
+   - Unique index on user_id (one webstead per user constraint)
+   - Partial unique index on custom_domain (WHERE custom_domain IS NOT NULL)
+   - GIN index on settings jsonb column (for fast JSON queries on theme, analytics_id, etc.)
+   - These indexes ensure fast tenant resolution and prevent duplicate registration
 
-**How** (8 detailed steps):
-1. Generate migration with references, unique subdomain, custom domain, and jsonb settings
-2. Add database constraints (NOT NULL, unique indexes, CHECK constraints for format/length)
-3. Model validations (presence, uniqueness, format, length, exclusion of reserved names)
-4. Define reserved subdomains constant (www, api, admin, etc.)
-5. Settings accessors using `store_accessor` for jsonb column
-6. Helper methods (`primary_domain`, `url`, `to_param`)
-7. Comprehensive test coverage
-8. Run migration and verify schema
+3. Add database-level CHECK constraints for format validation
+   - Subdomain format: ^[a-z0-9][a-z0-9-]*[a-z0-9]$ (lowercase alphanumeric + hyphens, no leading/trailing hyphens)
+   - Custom domain format: ^[a-z0-9][a-z0-9.-]*[a-z0-9]$ (valid DNS name pattern)
+   - Use execute block in migration to add ALTER TABLE ADD CONSTRAINT statements
+   - Provides defense-in-depth (Rails validations can be bypassed via SQL, constraints cannot)
 
-**Backup**: Fallback strategies if CHECK constraints or jsonb cause compatibility issues.
+4. Implement model validations in app/models/webstead.rb
+   - belongs_to :user (establishes relationship, enables @user.webstead)
+   - subdomain: presence, uniqueness (case_sensitive: false), length (3..63), format (same as CHECK constraint), exclusion (RESERVED_SUBDOMAINS)
+   - custom_domain: uniqueness (case_sensitive: false, allow_nil: true), length (max 253), format (DNS pattern, allow_nil: true)
+   - user_id: uniqueness (enforces one webstead per user)
+   - Reserved subdomain list: www, api, admin, app, dashboard, blog, forum, mail, email, ftp, ssh, git, status, help, support, docs, wiki, assets, cdn, static, media, images, uploads, files, download, staging, dev, test, development, production
+   
+5. Add settings accessor with store_accessor
+   - Use store_accessor :settings, :theme, :analytics_id, :custom_css
+   - Allows @webstead.theme = "dark" instead of @webstead.settings[:theme]
+   - Provides typed accessors for common settings without new columns
 
-**Context**: Lists relevant files and dependencies (PostgreSQL 12+, Rails 8+, User model).
+6. Implement helper methods for domain resolution
+   - primary_domain: returns custom_domain if set, otherwise "#{subdomain}.webstead.dev"
+   - url: returns "https://#{primary_domain}"
+   - to_param: returns subdomain (for URL generation, enables webstead_path(@webstead) → /websteads/username)
+   - These helpers are used throughout the app for generating URLs and identifying the current tenant
 
-The spec follows the TOML format and provides actionable implementation details without being overly prescriptive.
+7. Add before_validation callback to normalize domains
+   - Normalize subdomain and custom_domain to lowercase before validation
+   - Prevents case-sensitivity bugs (User registers "TestUser" but routes expect "testuser")
+   - Ensures database uniqueness constraints work correctly
+
+8. Write comprehensive model tests in test/models/webstead_test.rb
+   - Test valid webstead creation
+   - Test subdomain validations: presence, uniqueness (case insensitive), format (reject dashes at start/end, spaces, underscores, uppercase), length (min 3, max 63), reserved names
+   - Test custom_domain validations: uniqueness, format (valid DNS names), optional (allow nil)
+   - Test user_id uniqueness (one webstead per user)
+   - Test settings accessor (theme, analytics_id, custom_css)
+   - Test helper methods (primary_domain, url, to_param)
+   - Test normalization (subdomain and custom_domain to lowercase)
+   - Aim for 100% coverage of validations and edge cases
+
+9. Run migration and verify database schema
+   - Run: bin/rails db:migrate
+   - Check db/schema.rb to verify all indexes and constraints are present
+   - Test in Rails console: Webstead.create!(user: User.first, subdomain: "test") should work
+   - Test constraint enforcement: try to insert invalid subdomain via SQL (should fail with CHECK constraint error)
+
+10. Manual verification in Rails console
+    - bin/rails console
+    - Create user: user = User.create!(email: "test@example.com", password: "password123")
+    - Create webstead: webstead = Webstead.create!(user: user, subdomain: "testuser")
+    - Test primary_domain: webstead.primary_domain (should return "testuser.webstead.dev")
+    - Test settings: webstead.theme = "dark"; webstead.save!; Webstead.last.theme (should return "dark")
+    - Test reserved subdomain: Webstead.create!(user: user, subdomain: "www") (should fail validation)
+    - Test uniqueness: Webstead.create!(user: user, subdomain: "testuser") (should fail with user_id uniqueness error)
+"""
+
+backup = "If User model doesn't exist yet, create a minimal User model first with email and password_digest for testing (or use a fixture/factory without actual user records). If PostgreSQL CHECK constraints fail, rely on Rails validations only (less secure but sufficient for MVP). If GIN index fails (PostgreSQL < 9.4), skip settings index and add it later. If store_accessor doesn't work with settings jsonb, use manual hash access (webstead.settings['theme']) until Rails.application.config.active_record.use_yaml_unsafe_load is configured."
+
+[context]
+files = [
+    "app/models/webstead.rb",
+    "db/migrate/TIMESTAMP_create_websteads.rb",
+    "test/models/webstead_test.rb",
+    "db/schema.rb"
+]
+
+dependencies = [
+    "PostgreSQL 9.4+ (for jsonb and GIN indexes)",
+    "Rails 8 (ActiveRecord, store_accessor)",
+    "User model (belongs_to relationship, may need to create minimal version)"
+]

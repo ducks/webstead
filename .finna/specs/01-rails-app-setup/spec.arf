@@ -1,64 +1,85 @@
 order = 1
-what = "Initialize Rails 8 application with PostgreSQL, Hotwire, Tailwind CSS, and essential gems"
-why = "Rails 8 provides modern foundation with built-in Hotwire/Turbo for reactive UI without complex JavaScript frameworks. PostgreSQL enables multi-tenancy via schemas and handles JSONB for ActivityPub objects. Tailwind gives utility-first styling for rapid UI iteration."
+what = "Initialize Rails 8 application with PostgreSQL, Hotwire, Tailwind CSS, and development tooling for multi-tenant personal site platform"
+
+why = "Establishes the foundation for Webstead with modern Rails 8 defaults (built-in authentication, Hotwire for reactive UI), PostgreSQL for robust multi-tenancy with row-level security, and Tailwind for rapid UI development. Rails 8's new defaults reduce dependencies and simplify the stack."
 
 how = """
 Step-by-step implementation plan:
 
-1. Create new Rails 8 app with PostgreSQL
-   - Run: `rails new webstead --database=postgresql --css=tailwind`
-   - Skip default test framework (add RSpec later)
-   - Includes Hotwire (Turbo + Stimulus) by default in Rails 8
+1. Create new Rails 8 application with PostgreSQL
+   - Run: rails new webstead --database=postgresql --css=tailwind --javascript=importmap
+   - Skip Devise, Rails 8 has built-in authentication
+   - Verify Rails 8 defaults: Hotwire (Turbo + Stimulus), Tailwind via cssbundling-rails
 
-2. Initialize git repository
-   - cd webstead
-   - git init
-   - Create .gitignore with: log/*, tmp/*, .env, .DS_Store
-   - Initial commit: "Initial Rails 8 app with PostgreSQL and Tailwind"
+2. Configure database.yml for development
+   - Update database.yml with PostgreSQL connection settings
+   - Database names: webstead_development, webstead_test
+   - Ensure username/password match local PostgreSQL setup
+   - Add connection pooling defaults (pool: 5, timeout: 5000)
 
-3. Configure PostgreSQL for development
-   - Update config/database.yml with local PostgreSQL settings
-   - Create databases: `rails db:create`
-   - Test connection: `rails db:migrate` (should succeed even with no migrations)
+3. Create and migrate development database
+   - Run: bin/rails db:create
+   - Verify PostgreSQL connection works
+   - Run initial migration (even if empty): bin/rails db:migrate
 
 4. Add essential gems to Gemfile
-   - Production: `pg`, `puma`, `redis` (for ActionCable/Turbo Streams)
-   - Development: `debug`, `pry-rails`, `annotate`, `rubocop-rails`
-   - Testing: `rspec-rails`, `factory_bot_rails`, `faker`
-   - Multi-tenancy: `apartment` gem for PostgreSQL schema isolation
-   - Federation: `http` gem for ActivityPub HTTP signatures
-   - Run: `bundle install`
+   - Verify Hotwire gems (turbo-rails, stimulus-rails) are present by default
+   - Verify Tailwind CSS via cssbundling-rails is present
+   - Add debugging gems if not present: gem 'debug', group: :development, :test
+   - Add testing gems if not present: gem 'rspec-rails', group: :development, :test
+   - Consider: gem 'annotate' for schema annotations in models
 
-5. Configure development environment
-   - Set up .env file with DATABASE_URL, REDIS_URL
-   - Add dotenv-rails gem for environment variable management
-   - Configure Rails logger to show SQL queries in development
+5. Install gem dependencies and run setup
+   - Run: bundle install
+   - Run: bin/rails turbo:install (should already be done by new command)
+   - Run: bin/rails stimulus:install (should already be done by new command)
+   - Verify CSS build: bin/rails tailwindcss:build
 
-6. Verify setup works
-   - Start Rails server: `rails server`
-   - Visit http://localhost:3000 - should see Rails welcome page
-   - Check logs for no errors
-   - Verify Tailwind compiles: check public/assets/tailwind-*.css
+6. Initialize Git repository
+   - Run: git init (if not already initialized)
+   - Create .gitignore with Rails defaults plus: .gems/, .env*, /coverage/
+   - Add pre-commit hook to prevent direct commits to main
+   - Initial commit: "Initialize Rails 8 app with PostgreSQL, Hotwire, Tailwind"
 
-7. Create shell.nix for reproducible environment
-   - Include: Ruby 3.3, PostgreSQL 16, Redis, Node.js 22
-   - Add shellHook with setup instructions
-   - Document all system dependencies
+7. Create shell.nix for reproducible development environment
+   - Include Ruby version matching .ruby-version
+   - Include PostgreSQL client libraries
+   - Include Node.js for asset compilation
+   - Add shellHook with helpful setup instructions
+
+8. Verify application boots
+   - Run: bin/rails server
+   - Visit http://localhost:3000
+   - Should see Rails welcome page
+   - Verify no errors in console
+
+9. Create basic README.md
+   - Document development setup (nix-shell entry)
+   - Document database setup commands
+   - Document how to start the server
+   - Document project vision (announce-only federation, multi-tenant)
+
+10. Commit initial setup
+    - Stage all files: git add .
+    - Commit: git commit -m "Initialize Rails 8 app with PostgreSQL, Hotwire, Tailwind"
+    - Create main branch if needed: git branch -M main
 """
 
-backup = "If Rails 8 has issues, use Rails 7.2 with importmap-rails instead of Hotwire. If apartment gem causes problems, implement schema-based multi-tenancy manually using ActiveRecord::Base.connection.schema_search_path."
+backup = "If Rails 8 defaults don't include Hotwire or Tailwind, manually add gems: gem 'turbo-rails', gem 'stimulus-rails', gem 'tailwindcss-rails'. If PostgreSQL connection fails, verify PostgreSQL is running (systemctl status postgresql or pg_ctl status), ensure database user exists (createuser -s webstead), or switch to SQLite for rapid prototyping (not recommended for multi-tenant production). If nix-shell is unavailable, document manual dependency installation steps in README."
 
 [context]
 files = [
     "Gemfile",
     "config/database.yml",
-    "config/environments/development.rb",
+    ".gitignore",
+    ".ruby-version",
+    "README.md",
     "shell.nix"
 ]
+
 dependencies = [
-    "Ruby 3.3+",
-    "PostgreSQL 16+",
-    "Redis 7+",
-    "Node.js 22+ (for Tailwind CLI)",
-    "Nix (for shell.nix environment)"
+    "Ruby 3.3+ (Rails 8 requirement)",
+    "PostgreSQL 14+ (multi-tenant row-level security)",
+    "Node.js 18+ (asset compilation)",
+    "Nix (optional, for reproducible environment)"
 ]

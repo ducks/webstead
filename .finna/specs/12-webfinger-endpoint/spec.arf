@@ -1,0 +1,111 @@
+order = 12
+what = "Implement WebFinger endpoint for ActivityPub discovery (returns actor URI for acct:username@webstead.dev queries)"
+
+why = "WebFinger is the standard discovery protocol for ActivityPub. When a Mastodon user searches for @username@webstead.dev, Mastodon queries /.well-known/webfinger to find the ActivityPub actor URI. Without this endpoint, federation cannot work - nobody can follow or discover webstead users from other fediverse servers."
+
+how = """
+Step-by-step implementation plan:
+
+1. Create WebFinger controller at app/controllers/well_known/webfinger_controller.rb
+   - Namespace under WellKnown module (Rails convention for .well-known endpoints)
+   - Single action: `show` method
+   - Extract 'resource' param from query string (format: acct:username@domain)
+   - Parse username from resource string (regex: /^acct:([^@]+)@/)
+   - Validate domain matches request host (reject queries for other domains)
+   - Look up Webstead by subdomain matching username
+   - Return 404 if webstead not found or domain mismatch
+   - Return JSON response conforming to RFC 7033 WebFinger spec
+
+2. Build WebFinger JSON response structure
+   - subject: The queried acct: URI (acct:username@webstead.dev)
+   - links: Array with single entry for ActivityPub actor
+     - rel: "self"
+     - type: "application/activity+json"
+     - href: Full URL to actor endpoint (https://username.webstead.dev/actor)
+   - Use content_type 'application/jrd+json' (WebFinger MIME type)
+
+3. Add route to config/routes.rb
+   - Map GET /.well-known/webfinger to well_known/webfinger#show
+   - Use namespace :well_known block for organization
+   - Ensure route is outside any subdomain constraints (must work on all subdomains)
+
+4. Write system test at test/system/well_known/webfinger_test.rb
+   - Test valid query: /.well-known/webfinger?resource=acct:alice@webstead.dev
+   - Verify response is 200 OK
+   - Verify Content-Type is application/jrd+json
+   - Verify subject matches requested resource
+   - Verify links array contains ActivityPub actor href
+   - Verify actor href format: https://alice.webstead.dev/actor
+   - Test 404 for non-existent username
+   - Test 404 for wrong domain (acct:alice@other-domain.com)
+   - Test 400 for malformed resource param
+
+5. Write controller test at test/controllers/well_known/webfinger_controller_test.rb
+   - Test JSON structure conforms to WebFinger spec
+   - Test subdomain extraction and webstead lookup
+   - Test domain validation (reject queries for other domains)
+   - Test error responses (404, 400)
+   - Test URL generation for actor endpoint
+
+6. Manual test with curl
+   - Start Rails server
+   - Query: curl "http://alice.webstead.test:3000/.well-known/webfinger?resource=acct:alice@webstead.test"
+   - Verify JSON response structure
+   - Test from different subdomain, verify domain validation works
+   - Test with Mastodon search if available (search for @username@webstead.dev)
+
+7. Add documentation comment in controller explaining WebFinger protocol
+   - Reference RFC 7033
+   - Explain acct: URI scheme
+   - Document expected query format
+   - Link to ActivityPub WebFinger requirements
+
+Example WebFinger response:
+{
+  "subject": "acct:alice@webstead.dev",
+  "links": [
+    {
+      "rel": "self",
+      "type": "application/activity+json",
+      "href": "https://alice.webstead.dev/actor"
+    }
+  ]
+}
+
+Key implementation notes:
+- Use request.host for domain validation (supports both webstead.dev and custom domains)
+- Subdomain extraction: username from acct: URI should match webstead.subdomain
+- Actor URL must use HTTPS in production, HTTP in development
+- Cache-Control headers not critical for v1 (WebFinger queries are infrequent)
+- Error responses should be JSON with meaningful error messages
+"""
+
+backup = """
+If subdomain-based discovery proves problematic:
+1. Alternative approach: Use path-based actor URLs (/users/:username/actor instead of subdomain)
+2. WebFinger returns: https://webstead.dev/users/alice/actor
+3. Simpler routing, no subdomain constraints needed
+4. Change Webstead.url method to return path-based URL
+5. Update all ActivityPub endpoints to use path routing
+6. Trade-off: Loses "personal site feel" but federation still works
+
+If domain validation causes issues with development/staging:
+1. Add ALLOWED_WEBFINGER_DOMAINS env var (comma-separated list)
+2. Default to request.host but allow override for testing
+3. Allows testing federation across multiple domains in development
+"""
+
+[context]
+files = [
+  "config/routes.rb",
+  "app/models/webstead.rb",
+  "app/controllers/application_controller.rb"
+]
+
+dependencies = [
+  "RFC 7033 WebFinger spec: https://datatracker.ietf.org/doc/html/rfc7033",
+  "ActivityPub spec section 4.2: https://www.w3.org/TR/activitypub/#actor-objects",
+  "Mastodon WebFinger implementation for reference",
+  "JSON response rendering (Rails built-in)",
+  "request.host for domain validation"
+]

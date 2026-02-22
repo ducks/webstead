@@ -1,0 +1,147 @@
+order = 20
+what = "Deploy Webstead to production with Kamal, wildcard SSL, and federation testing"
+why = "v1 deploy validates the full stack: multi-tenancy works in production, wildcard domains route correctly, SSL certs generate for subdomains, ActivityPub federation reaches real Mastodon instances, and tenant isolation prevents data leaks"
+how = """
+Step-by-step implementation:
+
+1. Install and configure Kamal
+   - Install kamal gem: `gem install kamal`
+   - Run `kamal init` to generate config/deploy.yml
+   - Configure registry (Docker Hub or GitHub Container Registry)
+   - Set service name to 'webstead'
+   - Configure healthcheck endpoint: /up (Rails 8 default)
+
+2. Configure environment and secrets
+   - Create .env.production with: DATABASE_URL, SECRET_KEY_BASE, RAILS_MASTER_KEY
+   - Generate production credentials: `rails credentials:edit --environment production`
+   - Store secrets in Kamal's secret store: `kamal secrets set SECRET_KEY_BASE=...`
+   - Configure PostgreSQL connection (RDS, managed Postgres, or self-hosted)
+   - Set RAILS_ENV=production and RAILS_LOG_TO_STDOUT=true
+
+3. Set up production server
+   - Provision VPS (DigitalOcean, Hetzner, AWS EC2)
+   - Install Docker on server (Kamal requires Docker 20.10+)
+   - Configure SSH access with keys (no password auth)
+   - Add server IP to config/deploy.yml under servers.web
+   - Test SSH access: `kamal server exec "docker --version"`
+
+4. Configure wildcard DNS for *.webstead.dev
+   - Add A record: webstead.dev → server IP
+   - Add wildcard A record: *.webstead.dev → server IP
+   - Verify DNS propagation: `dig username.webstead.dev` (should return server IP)
+   - Wait 5-10 minutes for full DNS propagation before SSL setup
+
+5. Configure Let's Encrypt SSL with Traefik
+   - Install Traefik as reverse proxy (Kamal supports Traefik out of box)
+   - Configure Traefik in config/deploy.yml:
+     accessories:
+       traefik:
+         image: traefik:v2.10
+         roles: [web]
+         port: "80:80,443:443"
+         env:
+           LETSENCRYPT_EMAIL: admin@webstead.dev
+         volumes:
+           - /var/run/docker.sock:/var/run/docker.sock
+           - ./traefik.yml:/etc/traefik/traefik.yml
+   - Create traefik.yml with Let's Encrypt ACME config (HTTP-01 challenge)
+   - Add Traefik labels to Rails service for SSL termination and wildcard routing
+   - Configure SNI (Server Name Indication) for subdomain-specific certificates
+   - Test cert generation: `curl -I https://test.webstead.dev` (should show valid cert)
+
+6. Deploy application with Kamal
+   - Build and push Docker image: `kamal build push`
+   - Deploy to production: `kamal deploy`
+   - Kamal will: build image, push to registry, pull on server, start containers, run migrations
+   - Check deploy status: `kamal app logs`
+   - Verify Rails app is running: `kamal app exec "rails runner 'puts Rails.env'"`
+
+7. Database setup and migrations
+   - Run migrations: `kamal app exec "rails db:migrate"`
+   - Verify schema: `kamal app exec "rails runner 'puts ActiveRecord::Base.connection.tables'"`
+   - Create first webstead via Rails console: `kamal app exec -i "rails console"`
+   - Test tenant isolation: create 2 websteads, verify posts don't leak between tenants
+
+8. Test multi-tenant routing in production
+   - Create test webstead: username=alice, subdomain=alice
+   - Visit https://alice.webstead.dev (should load Alice's webstead)
+   - Check Current.webstead is set: verify logs show correct tenant
+   - Create post as Alice, verify shows on alice.webstead.dev but not on bob.webstead.dev
+   - Test subdomain constraint: visit https://invalid.webstead.dev (should 404)
+   - Test SSL cert: `openssl s_client -connect alice.webstead.dev:443 -servername alice.webstead.dev`
+
+9. Set up Mastodon test instance for federation
+   - Option A: Use existing test Mastodon instance (mastodon.social, fosstodon.org)
+   - Option B: Spin up local Mastodon with Docker Compose (recommended for thorough testing)
+   - For local Mastodon: follow mastodon/mastodon docker-compose.yml setup
+   - Create test Mastodon account: testuser@mastodon.local
+   - Verify Mastodon is reachable from Webstead server (network access)
+
+10. Test WebFinger endpoint
+    - Verify WebFinger responds: `curl https://alice.webstead.dev/.well-known/webfinger?resource=acct:alice@webstead.dev`
+    - Should return JSON with actor URL
+    - Test from Mastodon: search for alice@webstead.dev in Mastodon search box
+    - Mastodon should find the actor via WebFinger discovery
+
+11. Test ActivityPub actor endpoint
+    - Verify actor JSON: `curl -H "Accept: application/activity+json" https://alice.webstead.dev/actor`
+    - Should return actor document with publicKey, inbox, outbox
+    - Test from Mastodon: follow alice@webstead.dev from test Mastodon account
+    - Check Rails logs for incoming Follow activity to inbox endpoint
+    - Verify Follower record created in database
+
+12. Test post federation (announce-only)
+    - Create published post as Alice: "Hello from Webstead!"
+    - Trigger federation job: PostFederationJob should run (check Sidekiq)
+    - Verify HTTP Signature generation in logs
+    - Check Mastodon test account timeline: post should appear
+    - Verify Create(Note) activity was delivered to Mastodon inbox
+    - Test post updates: edit post, verify Update activity federates
+    - Test post deletion: destroy post, verify Delete activity federates
+
+13. Validate tenant isolation in production
+    - Create 2 websteads: alice and bob
+    - Log in as Alice, create post "Alice's secret post"
+    - Switch to Bob's webstead (bob.webstead.dev)
+    - Verify Bob cannot see Alice's post (query Post.all in Bob's context)
+    - Check database: `SELECT * FROM posts WHERE webstead_id = alice_webstead_id` vs bob_webstead_id
+    - Verify Current.webstead is scoping queries correctly
+    - Test cross-tenant POST attempts: try to create comment on Alice's post while in Bob's context (should fail)
+
+14. Performance and security checks
+    - Run security audit: `bundle exec brakeman`
+    - Check for N+1 queries: enable Bullet gem, browse site, check logs
+    - Verify Content Security Policy headers are set
+    - Test rate limiting on federation endpoints (prevent spam)
+    - Check SSL configuration: `ssllabs.com/ssltest` (should be A+ rating)
+    - Verify HTTP Signature validation works (reject unsigned federation requests)
+
+15. Monitoring and rollback plan
+    - Set up basic monitoring: uptime checks (UptimeRobot, Pingdom)
+    - Configure error tracking: Sentry or Honeybadger
+    - Set up log aggregation: Papertrail or CloudWatch Logs
+    - Document rollback: `kamal rollback` reverts to previous deploy
+    - Test rollback: deploy, then rollback, verify app still works
+"""
+backup = "If Kamal deployment fails: use traditional Capistrano with Puma + Nginx. If wildcard SSL via Let's Encrypt fails: use Cloudflare proxy with universal SSL. If federation test fails: check firewall rules (port 443 must be open), verify DNS is propagated, test WebFinger manually with curl, check Rails logs for ActivityPub errors. If tenant isolation fails: add database-level row security policies (PostgreSQL RLS) as additional safeguard"
+
+[context]
+files = [
+  "config/deploy.yml",
+  "config/environments/production.rb",
+  "config/routes.rb",
+  "app/controllers/application_controller.rb",
+  "app/models/webstead.rb",
+  "app/jobs/post_federation_job.rb",
+  "config/initializers/tenant.rb"
+]
+dependencies = [
+  "kamal gem",
+  "Docker 20.10+ on production server",
+  "Traefik v2.10 for reverse proxy",
+  "Let's Encrypt for SSL certificates",
+  "DNS provider with wildcard record support",
+  "PostgreSQL production database (RDS, managed Postgres, or self-hosted)",
+  "Mastodon test instance (local or remote)",
+  "Redis for Sidekiq background jobs"
+]

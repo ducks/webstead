@@ -1,0 +1,178 @@
+order = 11
+what = "Generate User model with Rails 8 has_secure_password authentication"
+why = "Enable webstead owners to log in and manage their content. Each user owns exactly one webstead. Uses Rails 8's built-in authentication patterns (has_secure_password, CurrentAttributes) instead of Devise for simplicity and minimal dependencies."
+how = """
+Step-by-step implementation:
+
+1. UNCOMMENT BCRYPT GEM
+   - Edit Gemfile and uncomment: gem "bcrypt", "~> 3.1.7"
+   - Run: bundle install
+   - Required for has_secure_password to hash passwords
+
+2. GENERATE USER MODEL
+   - Run: rails generate model User email:string username:string password_digest:string webstead_id:integer
+   - Migration should include:
+     * email (string, not null, unique index)
+     * username (string, not null, unique index)
+     * password_digest (string, not null)
+     * webstead_id (integer, foreign key, unique index, nullable for now)
+     * timestamps
+   - Add database constraints for uniqueness
+   - Run: rails db:migrate
+
+3. UPDATE USER MODEL
+   - Add has_secure_password (enables password, password_confirmation)
+   - Add validations:
+     * email: presence, uniqueness (case-insensitive), format (basic email regex)
+     * username: presence, uniqueness (case-insensitive), length (3-30 chars), format (alphanumeric + underscores)
+     * password: length minimum 8 chars (only on create/update when changing password)
+   - Add optional belongs_to :webstead (allows user without webstead during signup)
+   - Normalize email and username to lowercase before validation
+   - Add helper method: def display_name; username; end
+
+4. UPDATE WEBSTEAD MODEL
+   - Change `belongs_to :user` to `belongs_to :user, optional: true` temporarily
+   - This allows creating webstead during signup flow (chicken-egg problem)
+   - Will be locked down later when webstead creation flow is built
+
+5. UPDATE CURRENT ATTRIBUTES
+   - Edit app/models/current.rb
+   - Add: attribute :user
+   - Keep existing: attribute :webstead
+   - Both user and webstead tracked per-request
+
+6. GENERATE SESSIONS CONTROLLER
+   - Run: rails generate controller Sessions new create destroy --skip-routes
+   - SessionsController#new: render login form
+   - SessionsController#create:
+     * Find user by email (case-insensitive)
+     * Authenticate with user.authenticate(params[:password])
+     * On success: set session[:user_id] = user.id, redirect to root_path
+     * On failure: flash.now[:alert], render :new (status: :unprocessable_entity)
+   - SessionsController#destroy:
+     * Clear session[:user_id]
+     * Redirect to root_path with flash notice
+
+7. ADD AUTHENTICATION TO APPLICATION CONTROLLER
+   - Add before_action :set_current_user
+   - Define set_current_user:
+     * Current.user = User.find_by(id: session[:user_id]) if session[:user_id]
+   - Add helper method current_user: Current.user
+   - Add helper method logged_in?: current_user.present?
+   - Add helper method authenticate_user! (redirect to login if not logged_in?)
+   - Make helper methods available to views: helper_method :current_user, :logged_in?
+
+8. GENERATE REGISTRATIONS CONTROLLER
+   - Run: rails generate controller Registrations new create --skip-routes
+   - RegistrationsController#new: render signup form (@user = User.new)
+   - RegistrationsController#create:
+     * Build user with permitted params (email, username, password, password_confirmation)
+     * If user.save: auto-login (session[:user_id] = user.id), redirect to root with notice
+     * Else: render :new (status: :unprocessable_entity)
+   - Strong params: permit(:email, :username, :password, :password_confirmation)
+
+9. ADD AUTHENTICATION ROUTES
+   - Edit config/routes.rb
+   - Add: get "signup", to: "registrations#new"
+   - Add: post "signup", to: "registrations#create"
+   - Add: get "login", to: "sessions#new"
+   - Add: post "login", to: "sessions#create"
+   - Add: delete "logout", to: "sessions#destroy"
+   - Add: resources :registrations, only: [] (empty, using named routes above)
+   - Add: resources :sessions, only: [] (empty, using named routes above)
+
+10. CREATE LOGIN VIEW (app/views/sessions/new.html.erb)
+    - Simple form with email and password fields
+    - Use form_with(url: login_path, method: :post)
+    - Fields: email_field_tag, password_field_tag
+    - Submit button: "Log in"
+    - Link to signup page
+    - Display flash[:alert] for errors
+    - Use Tailwind classes for styling (match existing post views)
+
+11. CREATE SIGNUP VIEW (app/views/registrations/new.html.erb)
+    - Form with email, username, password, password_confirmation
+    - Use form_with(model: @user, url: signup_path)
+    - Display validation errors: @user.errors.full_messages
+    - Fields: text_field :email, text_field :username, password_field :password, password_field :password_confirmation
+    - Submit button: "Sign up"
+    - Link to login page
+    - Use Tailwind classes for styling
+
+12. ADD LOGOUT BUTTON TO LAYOUT
+    - Edit app/views/layouts/application.html.erb
+    - Add nav section with conditional display:
+      * If logged_in?: show current_user.username and logout button
+      * Else: show login and signup links
+    - Logout button uses button_to logout_path, method: :delete
+    - Place in header or top navigation
+
+13. PROTECT POSTS CONTROLLER ACTIONS
+    - Edit app/controllers/posts_controller.rb
+    - Add: before_action :authenticate_user!, only: [ :new, :create, :edit, :update ]
+    - Index and show remain public (no authentication required)
+
+14. WRITE USER MODEL TESTS
+    - Create spec/models/user_spec.rb or test/models/user_test.rb
+    - Test validations: email presence/uniqueness, username format, password length
+    - Test has_secure_password: user.authenticate works correctly
+    - Test normalization: email and username lowercase
+    - Test associations: responds to webstead
+
+15. WRITE SESSIONS CONTROLLER TESTS
+    - Test login flow: valid credentials create session, invalid show error
+    - Test logout: clears session and redirects
+    - Create test fixtures or factories for users
+
+16. RUN TESTS AND MANUAL TESTING
+    - Run: rails test (or bundle exec rspec)
+    - Manually test:
+      * Visit /signup, create account
+      * Visit /login, log in
+      * Check session persists across requests
+      * Click logout, verify session cleared
+      * Try accessing /posts/new without login (should redirect)
+    - Fix any failing tests or issues
+
+17. COMMIT CHANGES
+    - Stage all files: user model, migration, controllers, views, routes
+    - Commit message: "Add Rails 8 authentication with User model and sessions"
+"""
+
+backup = """
+If Rails 8 authentication generator exists and differs from manual approach:
+- Run: rails generate authentication (if available in Rails 8.1)
+- Review generated files and adapt to Webstead's multi-tenant architecture
+- Ensure Current.user is set correctly alongside Current.webstead
+- Modify to fit one-user-per-webstead relationship
+
+If bcrypt fails to install (native extension issues):
+- Check system has build tools: gcc, make, ruby-dev
+- Try: bundle config build.bcrypt --use-system-libraries
+- Alternative: use argon2 gem instead (gem "argon2", rails 8 supports via has_secure_password algorithm: :argon2)
+
+If session storage causes issues:
+- Rails 8 defaults to encrypted cookies (good for most cases)
+- For high-traffic: switch to database sessions (gem "activerecord-session_store")
+- Or Redis sessions: config.session_store :redis_store
+
+If authentication conflicts with subdomain routing:
+- Ensure session cookie domain is set correctly in config/initializers/session_store.rb
+- Set: domain: ".webstead.dev" (note the leading dot)
+- Allows session to work across all subdomains
+"""
+
+[context]
+files = [
+  "app/models/webstead.rb",
+  "app/models/current.rb",
+  "app/controllers/application_controller.rb",
+  "app/controllers/posts_controller.rb",
+  "config/routes.rb",
+  "Gemfile"
+]
+dependencies = [
+  "bcrypt (~> 3.1.7)",
+  "Rails 8.1.2 with has_secure_password",
+  "ActiveSupport::CurrentAttributes for Current.user"
+]
