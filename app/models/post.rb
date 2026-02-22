@@ -1,5 +1,7 @@
 class Post < ApplicationRecord
   belongs_to :webstead
+  # TODO: Uncomment when User model is created and migration adds user_id (step 4)
+  # belongs_to :user, optional: true
 
   # Validations
   validates :title, presence: true, length: { minimum: 1, maximum: 300 }
