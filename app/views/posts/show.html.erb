@@ -1,0 +1,30 @@
+<%= turbo_frame_tag dom_id(@post) do %>
+  <article class="bg-white shadow rounded-lg p-8 mb-8">
+    <header class="mb-6 border-b border-gray-200 pb-6">
+      <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-3"><%= @post.title %></h1>
+      <div class="flex items-center text-sm text-gray-600">
+        <span><%= @post.published_at.strftime("%B %d, %Y at %I:%M %p") %></span>
+        <span class="mx-2">•</span>
+        <span>by <%= Current.webstead.subdomain %></span>
+      </div>
+    </header>
+
+    <div class="prose prose-lg max-w-none">
+      <%= markdown_to_html(@post.body) %>
+    </div>
+  </article>
+<% end %>
+
+<section class="bg-white shadow rounded-lg p-8">
+  <h2 class="text-2xl font-bold text-gray-900 mb-6">Comments</h2>
+  
+  <%= turbo_stream_from @post %>
+  
+  <div class="space-y-4">
+    <% if @comments.any? %>
+      <%= render partial: "comments/comment", collection: @comments, as: :comment %>
+    <% else %>
+      <p class="text-gray-600 text-center py-8">No comments yet. Be the first to comment!</p>
+    <% end %>
+  </div>
+</section>
