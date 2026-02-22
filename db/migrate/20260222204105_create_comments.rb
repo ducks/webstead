@@ -11,7 +11,7 @@ class CreateComments < ActiveRecord::Migration[8.0]
       t.timestamps null: false
     end
 
-    add_index :comments, [:post_id, :created_at]
+    add_index :comments, [ :post_id, :created_at ]
     add_index :comments, :parent_id
     add_index :comments, :webstead_id
 

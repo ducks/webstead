@@ -9,7 +9,7 @@ class SetCurrentWebstead
 
     if subdomain.present? && !reserved_subdomain?(subdomain)
       webstead = Webstead.find_by(subdomain: subdomain)
-      
+
       if webstead
         Current.webstead = webstead
       else
@@ -26,11 +26,11 @@ class SetCurrentWebstead
   private
 
   def extract_subdomain(host)
-    host = host.split(':').first
-    
-    parts = host.split('.')
+    host = host.split(":").first
+
+    parts = host.split(".")
     return nil if parts.length < 3
-    
+
     parts.first
   end
 
@@ -41,8 +41,8 @@ class SetCurrentWebstead
   def render_404(env)
     [
       404,
-      { 'Content-Type' => 'text/html' },
-      [File.read(Rails.root.join('public', '404.html'))]
+      { "Content-Type" => "text/html" },
+      [ File.read(Rails.root.join("public", "404.html")) ]
     ]
   end
 end
