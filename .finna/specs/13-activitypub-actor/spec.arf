@@ -1,0 +1,34 @@
+order = 13
+what = "Create ActivityPub::ActorSerializer to generate JSON-LD Actor document (Person type) with inbox/outbox/publicKey endpoints"
+why = "Actor document is required for Mastodon to discover and follow webstead users. This is the profile/identity in ActivityPub - must include inbox (receive follows), outbox (read posts), and publicKey (verify signatures). Without this, federation won't work."
+
+how = """
+1. Generate ActivityPub module and ActorSerializer class: `rails g serializer activitypub/actor` then move to `app/serializers/activitypub/actor_serializer.rb`
+
+2. Implement JSON-LD Actor document structure with required ActivityPub fields:
+   - @context: ["https://www.w3.org/ns/activitystreams", "https://w3id.org/security/v1"]
+   - type: "Person"
+   - id: actor URI (https://username.webstead.dev/actor or https://username.webstead.dev/u/username)
+   - preferredUsername: webstead.subdomain
+   - name: webstead.settings["display_name"] || webstead.subdomain
+   - summary: webstead.settings["bio"] (optional)
+   - url: webstead homepage (https://username.webstead.dev)
+   - inbox: actor URI + "/inbox"
+   - outbox: actor URI + "/outbox"
+   - publicKey: { id: actor_uri + "#main-key", owner: actor_uri, publicKeyPem: fetch from webstead }
+
+3. Add public key generation to Webstead model:
+   - Add `private_key_pem` and `public_key_pem` text columns via migration
+   - Generate RSA 2048-bit keypair on webstead creation with OpenSSL
+   - Store both keys encrypted in database (use Rails credentials/encrypted attributes)
+   - Add `public_key` and `private_key` methods that parse PEM strings into OpenSSL::PKey::RSA objects
+   - Add migration: `rails g migration AddKeypairToWebsteads private_key_pem:text public_key_pem:text`
+
+4. Add route and controller action to serve Actor document:
+   - Route: `get '/.well-known/actor', to: 'activitypub/actors#show'` (main actor endpoint)
+   - Also route: `get '/u/:username', to: 'activitypub/actors#show'` (human-friendly URL)
+   - Controller: `app/controllers/activitypub/actors_controller.rb`
+   - Action: `def show` - find Current.webstead, render ActorSerializer with content_type: 'application/activity+json'
+   - Must respond with correct Content-Type header: `application/ld+json; profile="https://www.w3.org/ns/activitystreams"` or `application/activity+json`
+
+5. Add ActorSerializer#as_json method that returns proper ActivityPub Actor hash:

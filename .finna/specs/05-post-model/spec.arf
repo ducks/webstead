@@ -1,61 +1,86 @@
 order = 5
-what = "Create Post model with markdown body, publish state, and tenant isolation"
-why = "Posts are the core content unit that users create and federate. Each post belongs to a webstead (tenant), supports draft/published workflow, and stores markdown content that will be rendered to HTML and federated as ActivityPub Notes."
+what = "Create Post model with title, body, published_at, and draft/published scopes"
+why = "Posts are the core content type for websteads. Support draft/published workflow so users can work on posts before making them public. Track which webstead owns each post for proper tenant isolation."
 
 how = """
-1. Generate Post migration and model:
-   - rails g model Post webstead:references title:string body:text published_at:timestamp
-   - Add NOT NULL constraints to webstead_id and title in migration
-   - Add index on [webstead_id, published_at] for efficient published post queries
-   - Add index on [webstead_id, created_at] for draft listing
+Step-by-step implementation plan:
 
-2. Configure Post model (app/models/post.rb):
-   - belongs_to :webstead (validates presence automatically via references)
-   - Validate title presence and length (min 1, max 300 chars)
-   - Validate body presence (blank drafts OK, but published posts need content)
-   - Add custom validation: published posts must have published_at timestamp
+1. Generate Post model and migration
+   - Run: rails g model Post title:string body:text published_at:datetime webstead:references
+   - Migration should create posts table with: id, title, body, published_at, webstead_id, timestamps
 
-3. Add publication scopes:
-   - scope :published, -> { where.not(published_at: nil).where('published_at <= ?', Time.current) }
-   - scope :draft, -> { where(published_at: nil) }
-   - scope :scheduled, -> { where('published_at > ?', Time.current) }
-   - scope :recent, -> { order(published_at: :desc, created_at: :desc) }
+2. Add indexes to migration
+   - Add index on webstead_id for fast tenant filtering
+   - Add index on published_at for chronological queries
+   - Add composite index on [webstead_id, published_at] for published posts query
 
-4. Add publish/unpublish methods:
-   - def publish! / publish(time = Time.current) - sets published_at
-   - def unpublish! - sets published_at to nil
-   - def published? - checks published_at <= Time.current
-   - def draft? - checks published_at.nil?
-   - def scheduled? - checks published_at > Time.current
+3. Update Post model (app/models/post.rb)
+   - Add belongs_to :webstead association
+   - Add validation: validates :title, presence: true
+   - Add validation: validates :body, presence: true
+   - Add validation: validates :webstead_id, presence: true
 
-5. Add tenant isolation query helpers:
-   - def self.for_webstead(webstead) - where(webstead: webstead)
-   - Works with Current.webstead pattern from step 3
+4. Add published/draft scopes
+   - Scope: scope :published, -> { where.not(published_at: nil).where('published_at <= ?', Time.current) }
+   - Scope: scope :draft, -> { where(published_at: nil) }
+   - Scope: scope :scheduled, -> { where('published_at > ?', Time.current) }
+   - Scope: scope :chronological, -> { order(published_at: :desc, created_at: :desc) }
 
-6. Write tests (test/models/post_test.rb):
-   - Validate title/body requirements
-   - Test published/draft/scheduled scopes
-   - Test publish!/unpublish! state transitions
-   - Test published? / draft? / scheduled? predicates
-   - Test tenant isolation via webstead_id foreign key
-   - Test that published scope respects time (future dates filtered out)
+5. Add helper methods
+   - Method: def published? / published_at.present? && published_at <= Time.current / end
+   - Method: def draft? / published_at.nil? / end
+   - Method: def scheduled? / published_at.present? && published_at > Time.current / end
 
-7. Run migration and verify:
-   - rails db:migrate
-   - rails console: verify Post.new, scopes, and validations work
+6. Add default scope for tenant isolation
+   - Include TenantScoped concern (assumes it exists from step 3)
+   - This automatically adds default_scope { where(webstead_id: Current.webstead&.id) } if TenantScoped is implemented
+   - If TenantScoped doesn't exist yet, manually add: default_scope { where(webstead_id: Current.webstead&.id) if Current.webstead }
+
+7. Run migration
+   - Run: rails db:migrate
+   - Verify schema.rb shows posts table with correct columns and indexes
+
+8. Write tests (test/models/post_test.rb)
+   - Test: validates presence of title, body, webstead_id
+   - Test: published scope returns only published posts (published_at <= now)
+   - Test: draft scope returns only drafts (published_at nil)
+   - Test: scheduled scope returns only scheduled posts (published_at > now)
+   - Test: chronological scope orders by published_at desc, then created_at desc
+   - Test: published? returns true when published_at <= now
+   - Test: draft? returns true when published_at is nil
+   - Test: scheduled? returns true when published_at > now
+
+9. Run tests
+   - Run: rails test test/models/post_test.rb
+   - Fix any failures
+   - Ensure all validations and scopes work correctly
 """
 
-backup = "If Rails 8 doesn't include good markdown rendering, add commonmarker gem. If scopes are too complex, start with just published/draft and add scheduled later. If validation is tricky, start permissive and tighten based on real usage."
+backup = """
+If TenantScoped concern doesn't exist yet (step 3 incomplete), manually implement tenant isolation:
+- Add to Post model: default_scope { where(webstead_id: Current.webstead&.id) if Current.webstead }
+- Add before_validation: before_validation :set_webstead_id, if: -> { webstead_id.nil? && Current.webstead }
+- Add private method: def set_webstead_id / self.webstead_id = Current.webstead.id / end
+
+If tests fail due to missing fixtures:
+- Create webstead fixture: websteads(:one) with subdomain: 'test', user_id: 1
+- Use in tests: posts(:one) with webstead: websteads(:one)
+
+If composite index causes issues:
+- Remove composite index, keep separate indexes on webstead_id and published_at
+- Query planner will use both indexes with bitmap index scan
+"""
 
 [context]
 files = [
   "app/models/post.rb",
-  "app/models/webstead.rb",
   "db/migrate/*_create_posts.rb",
-  "test/models/post_test.rb"
+  "test/models/post_test.rb",
+  "app/models/webstead.rb",
+  "app/models/concerns/tenant_scoped.rb"
 ]
 dependencies = [
-  "Rails 8.0+",
-  "PostgreSQL (timestamp with time zone support)",
-  "Webstead model from step 4"
+  "Rails 8",
+  "PostgreSQL",
+  "TenantScoped concern (from step 3)"
 ]

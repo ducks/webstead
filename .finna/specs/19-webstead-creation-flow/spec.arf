@@ -1,0 +1,171 @@
+order = 19
+what = "Build webstead creation flow - user signs up, claims subdomain, webstead provisioned, keypair generated, actor document created"
+why = "Users need a seamless onboarding experience to claim their subdomain and get a functioning federated webstead. This step combines user signup with webstead provisioning and generates the cryptographic keypair needed for ActivityPub HTTP Signatures. The keypair is generated during creation (not on-demand) so the actor document is immediately valid for federation."
+how = """
+Step-by-step implementation plan:
+
+1. Generate RSA keypair on webstead creation
+   - Add `private_key_pem` text column to websteads table (encrypted at rest)
+   - Add `public_key_pem` text column to websteads table
+   - Install `openssl` gem if not already present
+   - In Webstead model after_create callback:
+     * Generate 2048-bit RSA keypair with OpenSSL::PKey::RSA.new(2048)
+     * Extract private key: keypair.to_pem
+     * Extract public key: keypair.public_key.to_pem
+     * Store both in database
+   - Add validation: both keys must be present after creation
+   - Add instance method `actor_public_key_id` returning "#{url}#main-key"
+
+2. Create webstead signup flow (combined user + webstead creation)
+   - Generate WebsteadsController with `new` and `create` actions
+   - Route: GET /websteads/new and POST /websteads
+   - View: app/views/websteads/new.html.erb with form for:
+     * Email (for user account)
+     * Password (for user account)
+     * Subdomain (for webstead)
+     * Display name (optional, for webstead)
+   - Form validation:
+     * Email format and uniqueness (User validation)
+     * Password strength (Rails 8 authentication requirements)
+     * Subdomain format and availability (Webstead validation)
+     * Show real-time subdomain availability check with Turbo Frame
+   - Handle form submission in WebsteadsController#create:
+     * Wrap in database transaction
+     * Create User record with email/password
+     * Create Webstead record with user_id and subdomain
+     * Webstead after_create generates keypair automatically
+     * Sign in user (Rails 8 authentication session)
+     * Redirect to webstead dashboard or first post creation
+   - Error handling:
+     * User validation failures (email taken, weak password)
+     * Webstead validation failures (subdomain taken, invalid format)
+     * Rollback transaction if either fails
+     * Re-render form with errors
+
+3. Add subdomain availability check endpoint
+   - Route: GET /websteads/check_availability?subdomain=foo
+   - Returns JSON: { available: true/false, message: "..." }
+   - Messages:
+     * Available: "#{subdomain}.webstead.dev is available!"
+     * Taken: "#{subdomain}.webstead.dev is already taken"
+     * Invalid: "Invalid subdomain format"
+     * Reserved: "#{subdomain} is a reserved subdomain"
+   - Add Turbo Frame to signup form that polls this endpoint on input change
+   - Debounce input (300ms) to avoid hammering server
+
+4. Create actor document endpoint (read from webstead)
+   - Route: GET /:subdomain (matches webstead subdomain)
+   - Route constraint: Accept: application/activity+json or application/ld+json
+   - Returns ActivityPub Actor document as JSON-LD
+   - Actor document structure:
+     * @context: ["https://www.w3.org/ns/activitystreams", "https://w3id.org/security/v1"]
+     * type: "Person"
+     * id: "https://#{subdomain}.webstead.dev/"
+     * preferredUsername: subdomain
+     * name: webstead.display_name || subdomain
+     * inbox: "https://#{subdomain}.webstead.dev/inbox"
+     * outbox: "https://#{subdomain}.webstead.dev/outbox"
+     * publicKey:
+       - id: "https://#{subdomain}.webstead.dev/#main-key"
+       - owner: "https://#{subdomain}.webstead.dev/"
+       - publicKeyPem: webstead.public_key_pem
+   - Add WebsteadActorSerializer or build JSON manually in controller
+   - Set proper Content-Type: application/activity+json; charset=utf-8
+
+5. Add webstead dashboard (landing page after signup)
+   - Route: GET /dashboard (when signed in)
+   - Shows:
+     * Your webstead URL: https://#{subdomain}.webstead.dev
+     * Quick stats: 0 posts, 0 comments
+     * CTA: "Create your first post"
+     * Link to view your public webstead
+   - Require authentication (before_action :authenticate_user!)
+
+6. Add webstead provisioning status page
+   - After successful signup, redirect to /websteads/:id/provisioning
+   - Show:
+     * "Your webstead is ready!"
+     * Subdomain claimed: #{subdomain}.webstead.dev
+     * Federation enabled: keypair generated
+     * Next steps: create your first post
+   - Auto-redirect to dashboard after 3 seconds
+
+7. Test the complete flow
+   - System test: Visit signup page, fill form, submit, see dashboard
+   - Test user creation with valid/invalid data
+   - Test webstead creation with valid/invalid subdomain
+   - Test keypair generation (both keys present after creation)
+   - Test actor document endpoint returns valid JSON-LD
+   - Test subdomain availability check returns correct responses
+   - Test reserved subdomain blocking (www, api, admin, etc.)
+   - Test duplicate subdomain rejection
+   - Test transaction rollback on partial failure
+
+8. Add welcome email (optional but recommended)
+   - Use ActionMailer to send welcome email after signup
+   - Email includes:
+     * Welcome message
+     * Your webstead URL
+     * Link to create first post
+     * Link to view ActivityPub actor document (for technical users)
+   - Deliver asynchronously with ActiveJob
+
+9. Add keypair rotation support (future-proofing)
+   - Add `rotated_at` timestamp column to websteads
+   - Add instance method `rotate_keypair!` that generates new keypair
+   - Document that key rotation requires re-federation (followers need new key)
+   - Not implemented in v1, just add column and method stub
+
+10. Security hardening
+    - Add rate limiting to signup endpoint (rack-attack or similar)
+    - Limit signups per IP address (10 per hour)
+    - Add CAPTCHA if abuse detected (hCaptcha or similar)
+    - Encrypt private_key_pem column at rest (Rails encrypted attributes)
+    - Never expose private_key_pem in API responses or logs
+    - Add `filtered_parameters` config to filter private_key_pem from logs
+"""
+backup = """
+If combined user/webstead signup is too complex initially:
+1. Use Rails 8 authentication scaffolding for user signup first
+2. Add separate "Create your webstead" flow after user signs in
+3. Keep user and webstead creation decoupled
+4. Later: combine into single-page signup experience
+
+If keypair generation fails or is slow:
+1. Generate keypairs asynchronously with background job after webstead creation
+2. Add `keypair_generated` boolean flag to websteads table
+3. Show "provisioning" state until keypair is ready
+4. Federation endpoints return 503 until keypair is generated
+
+If actor document serialization is complex:
+1. Use plain Ruby hash instead of serializer gem
+2. Manually build JSON structure in controller
+3. Test with `curl -H "Accept: application/activity+json" https://subdomain.webstead.dev/`
+4. Validate against ActivityPub spec: https://www.w3.org/TR/activitypub/
+
+If subdomain availability check causes performance issues:
+1. Remove real-time checking
+2. Show availability only on form submission (synchronous validation)
+3. Add database index on websteads.subdomain for fast lookups (should already exist)
+"""
+
+[context]
+files = [
+  "app/models/webstead.rb",
+  "app/models/user.rb",
+  "app/controllers/websteads_controller.rb",
+  "app/views/websteads/new.html.erb",
+  "config/routes.rb",
+  "db/migrate/*_add_keypair_to_websteads.rb",
+  "config/initializers/filter_parameters.rb",
+  "spec/system/webstead_signup_spec.rb",
+  "spec/models/webstead_spec.rb",
+  "spec/requests/actor_document_spec.rb"
+]
+dependencies = [
+  "openssl (Ruby stdlib for RSA keypair generation)",
+  "rack-attack (rate limiting for signup endpoint)",
+  "hcaptcha or recaptcha (optional CAPTCHA for abuse prevention)",
+  "Rails 8 authentication (user signup/signin)",
+  "Turbo Frames (real-time subdomain availability check)"
+]

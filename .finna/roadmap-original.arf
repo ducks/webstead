@@ -1,0 +1,134 @@
+what = "Multi-tenant Rails 8 personal site platform with ActivityPub federation and threaded comments"
+why = "Provide makers, artists, and creators with their own federated web presence. Fills gap between static sites and social platforms - you get your own space with built-in federation to the fediverse and threaded discussions without the complexity of self-hosting."
+
+[[steps]]
+order = 1
+name = "rails-app-setup"
+summary = "Initialize Rails 8 app with PostgreSQL, configure development environment, add basic gems (hotwire, tailwind)"
+depends_on = []
+
+[[steps]]
+order = 2
+name = "webstead-model"
+summary = "Create Webstead model with subdomain, user_id, settings. Add uniqueness validations and subdomain format constraints."
+depends_on = ["rails-app-setup"]
+
+[[steps]]
+order = 3
+name = "subdomain-routing"
+summary = "Configure subdomain constraints in routes.rb, add middleware to set current webstead from subdomain, add webstead resolution with 404 handling"
+depends_on = ["webstead-model"]
+
+[[steps]]
+order = 4
+name = "row-level-security"
+summary = "Add webstead_id to posts/comments tables, implement Current.webstead pattern, add database constraints and indexes for tenant isolation"
+depends_on = ["subdomain-routing"]
+
+[[steps]]
+order = 5
+name = "post-model"
+summary = "Create Post model with title, body (markdown), published_at, webstead_id. Add scopes for published/draft filtering."
+depends_on = ["row-level-security"]
+
+[[steps]]
+order = 6
+name = "comment-model"
+summary = "Create Comment model with body, parent_id (self-referential), post_id, webstead_id, author details (local user_id or federated actor_id)"
+depends_on = ["post-model"]
+
+[[steps]]
+order = 7
+name = "federated-actor-model"
+summary = "Create FederatedActor model to cache remote ActivityPub users with actor_uri, username, display_name, avatar_url, last_fetched_at"
+depends_on = ["comment-model"]
+
+[[steps]]
+order = 8
+name = "basic-views"
+summary = "Build Hotwire views for posts index (list all posts), post show (with nested comments), minimal layout with Tailwind styling"
+depends_on = ["federated-actor-model"]
+
+[[steps]]
+order = 9
+name = "post-controller"
+summary = "Implement PostsController with index, show, create, update actions. Add authentication gates (defer full auth system)."
+depends_on = ["basic-views"]
+
+[[steps]]
+order = 10
+name = "comment-controller"
+summary = "Implement CommentsController with create action for nested replies. Add Turbo Stream responses for live comment insertion."
+depends_on = ["post-controller"]
+
+[[steps]]
+order = 11
+name = "activitypub-outbox"
+summary = "Create ActivityPub::OutboxController to serve Actor object and OrderedCollection at /.well-known/webfinger and /outbox"
+depends_on = ["comment-controller"]
+
+[[steps]]
+order = 12
+name = "activitypub-publisher"
+summary = "Build ActivityPub::Publisher service to generate Create activities (Note objects) for published posts with proper JSON-LD context"
+depends_on = ["activitypub-outbox"]
+
+[[steps]]
+order = 13
+name = "federation-job"
+summary = "Create FederatePostJob to deliver ActivityPub activities to follower inboxes (start with Mastodon instance for testing)"
+depends_on = ["activitypub-publisher"]
+
+[[steps]]
+order = 14
+name = "webfinger-endpoint"
+summary = "Implement /.well-known/webfinger endpoint to respond with Actor URI when queried by remote servers"
+depends_on = ["federation-job"]
+
+[[steps]]
+order = 15
+name = "markdown-rendering"
+summary = "Add markdown gem (redcarpet or commonmarker), build helper to safely render post/comment markdown with syntax highlighting"
+depends_on = ["webfinger-endpoint"]
+
+[[steps]]
+order = 16
+name = "threading-ui"
+summary = "Build nested comment rendering with indentation, collapse/expand controls, Reddit-style threading with visual guides"
+depends_on = ["markdown-rendering"]
+
+[[steps]]
+order = 17
+name = "authentication-system"
+summary = "Implement Rails 8 built-in authentication (or minimal Devise setup) with signup, login, password reset, session management"
+depends_on = ["threading-ui"]
+
+[[steps]]
+order = 18
+name = "webstead-creation"
+summary = "Build webstead creation flow - user signs up, claims subdomain, webstead is provisioned with default settings"
+depends_on = ["authentication-system"]
+
+[[steps]]
+order = 19
+name = "post-drafts"
+summary = "Add draft/published state to posts, build draft management UI, add publish action that triggers federation job"
+depends_on = ["webstead-creation"]
+
+[[steps]]
+order = 20
+name = "mvp-polish"
+summary = "Add error handling, validation messages, loading states, basic styling polish, ensure subdomain isolation works correctly"
+depends_on = ["post-drafts"]
+
+[[steps]]
+order = 21
+name = "deployment-prep"
+summary = "Configure production database, set up subdomain wildcard DNS (*.webstead.dev), prepare Dockerfile/deployment config"
+depends_on = ["mvp-polish"]
+
+[[steps]]
+order = 22
+name = "mvp-deploy"
+summary = "Deploy MVP to production, test federation with real Mastodon instance, validate multi-tenant isolation, monitor for issues"
+depends_on = ["deployment-prep"]

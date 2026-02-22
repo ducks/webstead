@@ -1,0 +1,19 @@
+order = 17
+what = "Implement HTTP Signatures service to sign outgoing POST requests with RSA private key"
+why = "ActivityPub requires HTTP Signatures (https://datatracker.ietf.org/doc/html/draft-cavage-http-signatures) to verify that POST requests (Create activities, Follow accepts) actually came from the claimed actor. Without signatures, remote servers will reject our federation requests. Each webstead needs its own RSA keypair stored in database and referenced in their Actor document."
+
+how = """
+Step-by-step implementation plan:
+
+1. Add public_key and private_key columns to websteads table
+   - Migration: add_column :websteads, :public_key, :text
+   - Migration: add_column :websteads, :private_key, :text
+   - Both should be text type to store PEM-encoded keys
+   - Run: rails g migration AddKeypairToWebsteads public_key:text private_key:text
+
+2. Generate RSA keypair on webstead creation
+   - Add after_create callback to Webstead model
+   - Use OpenSSL::PKey::RSA.generate(2048) to create keypair
+   - Store private_key as key.to_pem
+   - Store public_key as key.public_key.to_pem
+   - Example:

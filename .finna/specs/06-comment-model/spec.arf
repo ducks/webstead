@@ -1,65 +1,142 @@
 order = 6
-what = "Create Comment model for threaded discussions with federated author support"
-why = "Comments enable community discussions on posts. Supports both local users and federated ActivityPub actors, with self-referential threading via parent_id for Reddit/HN-style nested conversations."
-
+what = "Create Comment model with body, parent_id (self-referential), post_id, webstead_id, author details (local user_id or federated actor_id)"
+why = "Comments enable local discussions on posts. Threading (via parent_id) provides Reddit/HN-style nested conversations. Supporting both local users and federated actors allows future expansion to federated replies while keeping v1 local-only. webstead_id ensures tenant isolation."
 how = """
 Step-by-step implementation plan:
 
-1. Generate Comment model with migration:
-   rails g model Comment body:text parent_id:integer post_id:integer webstead_id:integer user_id:integer federated_actor_id:integer created_at:datetime updated_at:datetime
+1. Generate Comment model with required fields:
+   rails g model Comment body:text post:references webstead:references parent:references user:references federated_actor:references created_at:datetime updated_at:datetime
 
-2. Update migration file (db/migrate/TIMESTAMP_create_comments.rb):
-   - Add null: false to body, post_id, webstead_id, created_at, updated_at
-   - Add foreign key constraints: post_id → posts.id, webstead_id → websteads.id
-   - Add optional foreign keys: user_id → users.id, federated_actor_id → federated_actors.id
-   - Add self-referential foreign key: parent_id → comments.id (on_delete: :cascade)
-   - Add index on [post_id, created_at] for efficient loading
-   - Add index on parent_id for threading queries
-   - Add index on webstead_id for tenant isolation
-   - Add check constraint: (user_id IS NOT NULL AND federated_actor_id IS NULL) OR (user_id IS NULL AND federated_actor_id IS NOT NULL)
+2. Edit migration (db/migrate/*_create_comments.rb):
+   - Make parent_id nullable (self-referential, null = root comment)
+   - Make user_id nullable (null if federated actor commented)
+   - Make federated_actor_id nullable (null if local user commented)
+   - Add check constraint: EITHER user_id OR federated_actor_id must be set (not both, not neither)
+   - Add indexes:
+     * index on post_id (fetch all comments for a post)
+     * index on webstead_id (tenant isolation queries)
+     * index on parent_id (fetch child comments for threading)
+     * index on user_id (find all comments by local user)
+     * index on created_at (chronological ordering)
+   - Add foreign key constraints with cascade deletes:
+     * post_id -> posts.id (delete comments when post deleted)
+     * webstead_id -> websteads.id (delete comments when webstead deleted)
+     * parent_id -> comments.id (cascade delete child comments when parent deleted)
+     * user_id -> users.id (nullify when user deleted, or cascade if we want to delete comments)
+     * federated_actor_id -> federated_actors.id (nullify when actor deleted)
 
-3. Update Comment model (app/models/comment.rb):
-   - Add belongs_to :post
-   - Add belongs_to :webstead
-   - Add optional belongs_to :user
-   - Add optional belongs_to :federated_actor
-   - Add self-referential associations: belongs_to :parent, class_name: 'Comment', optional: true
-   - Add has_many :replies, class_name: 'Comment', foreign_key: :parent_id, dependent: :destroy
-   - Add validations: presence of body (minimum 1 character), post_id, webstead_id
-   - Add custom validation: ensure exactly one of user_id or federated_actor_id is present
-   - Add scope :root_comments (where parent_id: nil) for top-level comments
-   - Add scope :ordered (order created_at: :asc) for chronological display
-   - Add method author that returns user or federated_actor
-   - Add method author_name that returns user.username or federated_actor.display_name
-   - Add method local? that returns true if user_id present
+3. Edit Comment model (app/models/comment.rb):
+   - Add validations:
+     * validates :body, presence: true, length: { minimum: 1, maximum: 10000 }
+     * validates :post_id, presence: true
+     * validates :webstead_id, presence: true
+     * validate :has_exactly_one_author (custom validator)
+   - Add associations:
+     * belongs_to :post
+     * belongs_to :webstead
+     * belongs_to :parent, class_name: 'Comment', optional: true
+     * has_many :replies, class_name: 'Comment', foreign_key: :parent_id, dependent: :destroy
+     * belongs_to :user, optional: true
+     * belongs_to :federated_actor, optional: true
+   - Add scopes:
+     * scope :root, -> { where(parent_id: nil) } (top-level comments only)
+     * scope :chronological, -> { order(created_at: :asc) }
+     * default_scope { where(webstead_id: Current.webstead&.id) } (tenant isolation)
+   - Add helper methods:
+     * def author_name - returns user.name or federated_actor.preferred_username
+     * def author_url - returns user path or federated_actor.actor_uri
+     * def root? - parent_id.nil?
+     * def depth - calculate nesting level by walking up parent chain
 
-4. Run migration:
+4. Add custom validator for exactly one author:
+   def has_exactly_one_author
+     if user_id.present? && federated_actor_id.present?
+       errors.add(:base, 'Comment cannot have both user_id and federated_actor_id')
+     elsif user_id.blank? && federated_actor_id.blank?
+       errors.add(:base, 'Comment must have either user_id or federated_actor_id')
+     end
+   end
+
+5. Add before_create callback to automatically set webstead_id from Current.webstead:
+   before_create :set_webstead_from_current
+   
+   private
+   
+   def set_webstead_from_current
+     self.webstead_id ||= Current.webstead&.id if Current.webstead
+   end
+
+6. Write comprehensive tests (test/models/comment_test.rb):
+   - Test validations (body presence, length limits)
+   - Test associations (post, webstead, parent, replies, user, federated_actor)
+   - Test exactly-one-author validation (fails with both, fails with neither, passes with user, passes with federated_actor)
+   - Test scopes (root returns only parent_id nil, chronological orders by created_at)
+   - Test helper methods (author_name, author_url, root?, depth)
+   - Test threading (create parent with 2 children, verify replies association)
+   - Test cascade deletes (delete parent, children should also delete)
+   - Test automatic webstead_id assignment from Current.webstead
+
+7. Run migration and tests:
    rails db:migrate
+   rails test test/models/comment_test.rb
 
-5. Add fixtures for testing (test/fixtures/comments.yml):
-   - root_comment: local user, no parent_id
-   - reply_comment: local user, parent_id references root_comment
-   - federated_comment: federated actor, no parent_id
-
-6. Write model tests (test/models/comment_test.rb):
-   - Test associations (post, webstead, user, federated_actor, parent, replies)
-   - Test validations (body presence, exactly one author type)
-   - Test author method returns correct object
-   - Test author_name returns correct string
-   - Test local? returns true for user_id, false for federated_actor_id
-   - Test root_comments scope excludes replies
-   - Test threaded replies work correctly (parent → children cascade)
-   - Test tenant isolation (can't comment on another webstead's post)
+8. Create sample data in rails console to verify:
+   webstead = Webstead.first
+   post = webstead.posts.first
+   user = webstead.user
+   
+   # Create root comment
+   root = Comment.create!(
+     body: 'This is a root comment',
+     post: post,
+     webstead: webstead,
+     user: user
+   )
+   
+   # Create threaded reply
+   reply = Comment.create!(
+     body: 'This is a reply',
+     post: post,
+     webstead: webstead,
+     parent: root,
+     user: user
+   )
+   
+   # Verify associations
+   root.replies.count # => 1
+   reply.parent # => root
+   reply.depth # => 1
 """
+backup = """
+If self-referential parent_id association causes issues:
+1. Use closure_tree gem for better hierarchical data management
+2. Add lft/rgt columns for nested set model (faster reads, slower writes)
+3. Use ltree PostgreSQL extension for materialized path (if PostgreSQL-only is acceptable)
 
-backup = "If check constraint fails on older PostgreSQL, implement author validation in model callback (before_validation). If self-referential association causes issues, use acts_as_tree gem or ancestry gem for more robust tree structure. If threading performance is poor with deep nesting, add depth column and limit nesting to 5 levels."
+If exactly-one-author validation is too complex:
+1. Make both user_id and federated_actor_id nullable without validation
+2. Add application-level checks in controller instead of model
+3. Document that only one should be set, trust application code
+
+If default_scope for tenant isolation causes issues:
+1. Remove default_scope, manually scope all queries: post.comments.where(webstead_id: Current.webstead.id)
+2. Use acts_as_tenant gem for explicit tenant scoping
+3. Add webstead_id to all comment queries manually via before_action in controllers
+"""
 
 [context]
 files = [
   "app/models/post.rb",
   "app/models/webstead.rb",
-  "app/models/user.rb",
   "app/models/federated_actor.rb",
+  "app/models/concerns/tenant_scoped.rb",
   "db/schema.rb"
 ]
-dependencies = ["PostgreSQL (check constraints)", "Rails 8 (model generator)"]
+dependencies = [
+  "Rails 8",
+  "PostgreSQL (foreign keys, check constraints)",
+  "Existing Post model",
+  "Existing Webstead model",
+  "Existing FederatedActor model",
+  "Current.webstead set by subdomain middleware"
+]

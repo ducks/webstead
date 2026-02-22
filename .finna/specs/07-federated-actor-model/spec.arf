@@ -1,36 +1,82 @@
 order = 7
-what = "Create FederatedActor model to cache remote ActivityPub users"
-why = "Enable local caching of remote fediverse users who comment on your posts. Avoids refetching actor info from remote servers on every page load, stores minimal profile data (username, display name, avatar) for display in comment threads."
+summary = "Create FederatedActor model to cache remote ActivityPub users"
+
+what = "Build FederatedActor model to store cached data about remote ActivityPub users (Mastodon, etc.) who comment on posts"
+
+why = "When displaying comments, we need to show display names and avatars for remote ActivityPub users. Rather than fetching actor data from remote servers on every page load (slow, unreliable), we cache the actor information locally and refresh periodically. This is standard practice for ActivityPub implementations."
+
 how = """
-Step-by-step implementation plan:
-1. Generate model: `rails g model FederatedActor actor_uri:string username:string display_name:string avatar_url:string last_fetched_at:datetime`
-2. Add validations to app/models/federated_actor.rb:
-   - validates :actor_uri, presence: true, uniqueness: true, format: { with: URI::DEFAULT_PARSER.make_regexp(%w[http https]) }
-   - validates :username, presence: true
-3. Add index on actor_uri (unique) for fast lookups by ActivityPub ID
-4. Add index on last_fetched_at for cache expiration queries
-5. Add class method `fetch_or_create(actor_uri)` that:
-   - Checks if actor exists in DB with fresh data (< 24 hours old)
-   - If stale/missing, fetches from remote server via HTTP GET with Accept: application/activity+json
-   - Parses JSON-LD response for preferredUsername, name, icon.url
-   - Creates or updates local FederatedActor record
-   - Returns the FederatedActor instance
-6. Run migration: `rails db:migrate`
-7. Test in rails console:
-   - FederatedActor.fetch_or_create('https://mastodon.social/users/example')
-   - Verify it stores username, display_name, avatar_url
-   - Verify subsequent calls return cached data without HTTP request
+1. Generate FederatedActor model and migration:
+   rails g model FederatedActor actor_uri:string username:string display_name:string avatar_url:string last_fetched_at:datetime webstead:references
+
+2. Edit migration to add constraints and indexes:
+   - Add NOT NULL constraint on actor_uri and webstead_id
+   - Add unique index on actor_uri (actor URIs are globally unique identifiers)
+   - Add index on webstead_id for tenant filtering
+   - Add index on last_fetched_at for refresh queries
+
+3. Edit app/models/federated_actor.rb:
+   - Add belongs_to :webstead association
+   - Add has_many :comments association (foreign_key: :federated_actor_id)
+   - Add validation: validates :actor_uri, presence: true, uniqueness: true
+   - Add validation: validates :actor_uri, format: { with: URI::DEFAULT_PARSER.make_regexp(%w[http https]) }
+   - Add method: def stale? - returns true if last_fetched_at is nil or older than 24 hours
+   - Add method: def refresh_from_remote - fetches actor data from actor_uri and updates attributes
+   - Add scope: scope :stale, -> { where('last_fetched_at IS NULL OR last_fetched_at < ?', 24.hours.ago) }
+
+4. Add tenant scoping concern:
+   include TenantScoped (if implemented in previous step)
+   OR manually add: default_scope { where(webstead: Current.webstead) } and after_initialize callback
+
+5. Create test file spec/models/federated_actor_spec.rb:
+   - Test validations: actor_uri presence, uniqueness, format
+   - Test associations: belongs_to webstead, has_many comments
+   - Test stale? method: returns true for nil last_fetched_at, returns true for old timestamps, returns false for recent timestamps
+   - Test scope :stale returns only actors with nil or old last_fetched_at
+   - Test tenant scoping: creates actors in correct webstead context
+
+6. Run migration:
+   rails db:migrate
+
+7. Run tests:
+   bundle exec rspec spec/models/federated_actor_spec.rb
+
+8. Verify in Rails console:
+   rails c
+   webstead = Webstead.first
+   Current.webstead = webstead
+   actor = FederatedActor.create!(actor_uri: 'https://mastodon.social/users/testuser', username: 'testuser')
+   actor.stale? # should return true
+   actor.update(last_fetched_at: Time.current)
+   actor.stale? # should return false
 """
-backup = "If ActivityPub fetching is too complex initially, create model with manual seeding and add fetch_or_create later. Start with just actor_uri and username as required fields, make display_name and avatar_url nullable. This lets Comment model reference FederatedActor immediately while deferring remote fetching implementation."
+
+backup = """
+If validating actor_uri format proves too strict (some ActivityPub implementations use non-standard URIs):
+1. Remove format validation
+2. Add custom validation method that checks for basic structure (starts with http/https, contains a hostname)
+3. Add error handling in refresh_from_remote to gracefully handle malformed URIs
+
+If tenant scoping via Current.webstead is not yet implemented:
+1. Skip TenantScoped concern inclusion
+2. Add manual belongs_to :webstead validation: validates :webstead, presence: true
+3. Add index on webstead_id for filtering: add_index :federated_actors, :webstead_id
+4. Filter manually in controllers/services when querying federated actors
+
+If refresh_from_remote implementation is complex (requires HTTP fetching, JSON-LD parsing):
+1. Leave method as stub for now: def refresh_from_remote; end
+2. Implement in later step dedicated to ActivityPub fetching
+3. Focus this step purely on data model and persistence layer
+"""
 
 [context]
 files = [
-  "app/models/federated_actor.rb",
-  "db/migrate/TIMESTAMP_create_federated_actors.rb",
-  "app/models/comment.rb"
+    "app/models/webstead.rb",
+    "app/models/comment.rb",
+    "app/models/concerns/tenant_scoped.rb",
+    "db/schema.rb"
 ]
 dependencies = [
-  "net/http (Ruby stdlib)",
-  "json-ld gem for parsing ActivityPub responses",
-  "addressable gem for URI validation"
+    "rails >= 8.0",
+    "rspec-rails (for testing)"
 ]

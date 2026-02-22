@@ -1,0 +1,23 @@
+order = 16
+what = "Create ActivityPub::OutboxController to serve OrderedCollection of Create(Note) activities for published posts, paginated (30 per page)"
+why = "The outbox endpoint is required for ActivityPub compliance and allows remote servers (Mastodon, etc.) to fetch a user's published posts. It provides a paginated feed of Create activities wrapping Note objects, enabling followers to discover and sync content."
+how = """
+Step-by-step implementation plan:
+1. Create app/controllers/activitypub/outbox_controller.rb with show action
+2. Add route: get '/@:username/outbox', to: 'activitypub/outbox#show', constraints: { format: :json }
+3. Find webstead by username, return 404 if not found
+4. Query published posts ordered by published_at DESC, paginate with limit 30
+5. Build OrderedCollection JSON-LD structure with @context, id, type, totalItems
+6. If page param present: build OrderedCollectionPage with items array of Create(Note) activities
+7. If no page param: return collection summary with first/last page URLs
+8. Each Create activity includes: @context, id, type, actor, published, to, cc, object (Note)
+9. Each Note object includes: id, type, attributedTo, content (HTML from kramdown), published, url, tag (empty array for now)
+10. Set Content-Type: application/activity+json
+11. Handle edge cases: empty outbox, last page, single page
+12. Add basic specs: collection structure, pagination, published posts only, JSON-LD format
+"""
+backup = "If pagination logic is complex, start with unpaginated outbox returning all posts (limit 100), then add pagination in follow-up commit. If JSON-LD serialization is tricky, create a separate ActivityPub::NoteSerializer concern to encapsulate Note object generation."
+
+[context]
+files = ["app/controllers/activitypub/outbox_controller.rb", "app/models/webstead.rb", "app/models/post.rb", "config/routes.rb", "spec/requests/activitypub/outbox_controller_spec.rb"]
+dependencies = ["kramdown (already in Gemfile for markdown rendering)", "Rails routing constraints for JSON format"]

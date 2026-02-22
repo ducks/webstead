@@ -1,46 +1,131 @@
 order = 10
-what = "Implement CommentsController with create action for nested replies and Turbo Stream responses"
-why = "Enable users to post threaded comments on content and see replies appear instantly without page refresh. Turbo Streams provide the reactive UX expected on modern web platforms while keeping the stack simple."
+what = "Implement CommentsController with create action and Turbo Stream responses for live comment insertion"
+why = "Enable real-time threaded discussions on posts without page refreshes. Turbo Streams provide native Rails solution for reactive UI updates when users post comments or replies."
 how = """
 Step-by-step implementation plan:
-1. Generate CommentsController with `rails g controller Comments create --no-helper --no-assets`
-2. Add route in config/routes.rb: `resources :comments, only: [:create]`
-3. Implement CommentsController#create action:
-   - Find the parent (Post or Comment) via polymorphic params
-   - Set webstead_id from Current.webstead
-   - Build new comment with parent association and comment_params
-   - Handle both local users and federated actors (use actor_type and actor_id)
-   - Save comment and respond with Turbo Stream on success
-4. Add strong parameters method comment_params permitting: :content, :parent_type, :parent_id, :actor_id, :actor_type
-5. Create app/views/comments/create.turbo_stream.erb view:
-   - Use turbo_stream.append to insert new comment into parent's comment list
-   - Target: dom_id(parent, :comments) or similar
-   - Render partial: "comments/comment" with locals: { comment: @comment }
-6. Add validation and error handling:
-   - If save fails, respond with turbo_stream.replace of form with errors
-   - Add flash messages for success/failure via turbo_stream.update
-7. Create app/views/comments/_comment.html.erb partial:
-   - Display comment content, author name, timestamp
-   - Show nested reply count if comment has children
-   - Include "Reply" button/link to show nested reply form
-   - Use Turbo Frame for nested reply forms (optional optimization)
-8. Add authentication check before_action :authenticate_user! (or equivalent)
-9. Add authorization to ensure user can comment on this webstead's content
-10. Test manually: create top-level comment, create nested reply, verify Turbo Stream insertion
+
+1. Generate CommentsController with Rails generator
+   - Run: rails generate controller Comments create
+   - Creates app/controllers/comments_controller.rb with create action
+   - Creates views directory: app/views/comments/
+
+2. Implement CommentsController#create action
+   - Set current webstead from Current.webstead (tenant scoping)
+   - Find post by params[:post_id] (scoped to current webstead)
+   - Build comment: @post.comments.build(comment_params)
+   - Set comment attributes: author_name, author_email, body, parent_id (for threading)
+   - If comment.save succeeds:
+     * Respond with Turbo Stream for live insertion
+     * Broadcast to correct DOM target (either #comments or nested under parent)
+   - If save fails:
+     * Re-render post show page with validation errors
+     * Use status: :unprocessable_entity for proper Turbo handling
+
+3. Add Turbo Stream response template
+   - Create app/views/comments/create.turbo_stream.erb
+   - Use turbo_stream.append to insert new comment
+   - Target: if comment.parent_id? then "#comment_#{comment.parent_id}_replies" else "#comments"
+   - Render: render partial: 'comments/comment', locals: { comment: @comment }
+   - Clear form after successful insert: turbo_stream.replace 'comment_form', partial: 'comments/form'
+
+4. Update routes.rb for nested comment routes
+   - Add: resources :posts, only: [:index, :show] do
+   -   resources :comments, only: [:create]
+   - end
+   - This creates: POST /posts/:post_id/comments
+
+5. Add comment form partial app/views/comments/_form.html.erb
+   - Use form_with model: [post, Comment.new], id: 'comment_form', data: { turbo: true }
+   - Fields: text_field :author_name, email_field :author_email, text_area :body
+   - Hidden field: hidden_field :parent_id (for replies)
+   - Submit button: 'Post Comment'
+   - Add Tailwind classes for styling
+
+6. Add reply button to comment partial
+   - In app/views/comments/_comment.html.erb add 'Reply' link
+   - Use Stimulus or Turbo Frame to show reply form below comment
+   - Reply form targets: data: { parent_id: comment.id }
+   - Alternative: inline form toggle with hidden_field :parent_id set to comment.id
+
+7. Update post show view to include comment form
+   - In app/views/posts/show.html.erb add:
+   - <div id="comments"><%= render @post.comments.top_level %></div>
+   - <%= render 'comments/form', post: @post %>
+   - Ensure Comment.top_level scope exists: scope :top_level, -> { where(parent_id: nil) }
+
+8. Add strong parameters to CommentsController
+   - private def comment_params
+   - params.require(:comment).permit(:author_name, :author_email, :body, :parent_id)
+   - end
+
+9. Add flash messages for success/failure
+   - On success: flash.now[:notice] = 'Comment posted successfully!'
+   - On failure: flash.now[:alert] = 'Failed to post comment.'
+   - Render flash in Turbo Stream: turbo_stream.update 'flash', partial: 'shared/flash'
+
+10. Test comment creation in browser
+    - Start Rails server: bin/rails server
+    - Navigate to post show page
+    - Submit comment form and verify:
+      * Comment appears instantly without page refresh
+      * Nested replies appear under parent comment
+      * Form clears after submission
+      * Flash message displays
+      * Validation errors show if fields empty
+
+11. Add system tests for CommentsController
+    - Create test/system/comments_test.rb
+    - Test: user can post top-level comment
+    - Test: user can post nested reply
+    - Test: comment appears without page refresh
+    - Test: validation errors prevent submission
+    - Use Capybara matchers: fill_in, click_button, assert_text
 """
-backup = "If Turbo Streams don't work initially, fall back to standard HTML redirect with notice flash and full page reload. Add Turbo Streams as progressive enhancement after basic flow works. Alternatively, use Turbo Frames instead of Turbo Streams for simpler scoped updates."
+backup = """
+If Turbo Streams prove difficult:
+- Fall back to traditional form submission with redirect
+- Use respond_to block with format.html { redirect_to @post, notice: 'Comment posted' }
+- Accept slower UX with full page reload
+- Can migrate to Turbo Streams later once basics work
+
+If nested reply forms are complex:
+- Start with only top-level comments
+- Add reply threading in separate step
+- Use simpler flat comment structure initially
+
+If real-time updates don't work:
+- Check Turbo is enabled in application.html.erb: <%= turbo_include_tags %>
+- Verify form has data: { turbo: true }
+- Check Rails logs for Turbo Stream requests (format: TURBO_STREAM)
+- Use browser DevTools to inspect Turbo Stream response
+"""
 
 [context]
 files = [
   "app/controllers/comments_controller.rb",
-  "config/routes.rb",
   "app/views/comments/create.turbo_stream.erb",
+  "app/views/comments/_form.html.erb",
   "app/views/comments/_comment.html.erb",
+  "app/views/posts/show.html.erb",
+  "config/routes.rb",
   "app/models/comment.rb",
-  "app/models/post.rb"
+  "test/system/comments_test.rb"
 ]
 dependencies = [
-  "Hotwire/Turbo Rails (included in Rails 8 by default)",
-  "Current.webstead middleware for tenant context",
-  "Authentication system (Rails 8 built-in or custom)"
+  "Rails 8 (includes Turbo by default)",
+  "Hotwire/Turbo for real-time updates",
+  "Tailwind CSS for form styling",
+  "Post model (must exist with has_many :comments)",
+  "Comment model (must exist with belongs_to :post, optional: :parent)",
+  "Current.webstead for tenant scoping"
+]
+
+[tests]
+strategy = "System tests with Capybara for full integration testing of Turbo Stream behavior"
+critical_paths = [
+  "Post top-level comment and verify instant appearance",
+  "Post nested reply and verify insertion under parent",
+  "Submit invalid comment and verify validation errors display",
+  "Verify form clears after successful submission",
+  "Verify comments scoped to current webstead only"
 ]

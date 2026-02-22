@@ -1,50 +1,119 @@
 order = 3
-what = "Configure Rails to route requests based on subdomain and set current tenant context"
-why = "Multi-tenancy requires identifying which webstead to serve based on the subdomain in the request URL (e.g., alice.webstead.dev vs bob.webstead.dev). Without subdomain routing, all users would see the same content. This step establishes the tenant resolution layer that every request flows through."
+what = "Configure subdomain routing with middleware to resolve current webstead and handle missing tenants"
+why = "Enable multi-tenancy by routing requests based on subdomain (username.webstead.dev), setting the current webstead context, and gracefully handling 404s for non-existent websteads"
+
 how = """
-1. Add subdomain constraint to routes.rb
-   - Wrap all content routes (posts, comments) with `constraints(subdomain: /.+/)` block
-   - Exclude 'www' and 'api' subdomains from constraint (reserved)
-   - Keep root domain routes outside constraint (landing page, auth)
-   - Example: `constraints(subdomain: /.+/) { resources :posts; resources :comments }`
+Step-by-step implementation plan:
 
-2. Create middleware to resolve and set current webstead
-   - Generate middleware: `rails g middleware SetCurrentWebstead`
-   - In middleware#call: extract subdomain from `request.host`
-   - Query `Webstead.find_by(subdomain: extracted_subdomain)`
-   - If found: store in `Current.webstead = webstead` (Rails Current Attributes)
-   - If not found: render 404 with "Webstead not found" message
-   - Register middleware in `config/application.rb` before ActionDispatch::Executor
+1. Add subdomain constraint to config/routes.rb
+   - Wrap all routes in `constraints subdomain: /.+/` block
+   - This ensures routes only match when a subdomain is present
+   - Exclude root domain (webstead.dev) from routing to app routes
 
-3. Create Current model for thread-safe tenant context
-   - Generate: `rails g model current --skip-migration`
-   - Delete generated migration, this is not a database model
-   - In `app/models/current.rb`: `class Current < ActiveSupport::CurrentAttributes; attribute :webstead; end`
-   - This provides `Current.webstead` accessible throughout request lifecycle
-   - Automatically resets between requests (thread-safe)
+2. Create SetCurrentWebstead middleware
+   - New file: app/middleware/set_current_webstead.rb
+   - Extract subdomain from request.host
+   - Query Webstead.find_by(subdomain: subdomain)
+   - If webstead exists, set Current.webstead = webstead
+   - If webstead is nil, return 404 response with friendly error page
+   - Handle both subdomain and custom_domain lookups (check both fields)
 
-4. Add webstead resolution helpers
-   - In ApplicationController: `helper_method :current_webstead`
-   - Define `def current_webstead; Current.webstead; end`
-   - Add `before_action :require_webstead` for controllers that need tenant context
-   - Define `def require_webstead; render_404 unless current_webstead; end`
+3. Add middleware to Rails application stack
+   - In config/application.rb, add `config.middleware.use SetCurrentWebstead`
+   - Middleware should run early in stack (before routing)
+   - Ensure it runs after Rack::Static (so static assets don't trigger webstead lookup)
 
-5. Handle 404 case gracefully
-   - Create `app/views/errors/webstead_not_found.html.erb`
-   - Render with 404 status and helpful message (check spelling, webstead may not exist)
-   - Log missing subdomain attempts for monitoring
-   - Consider rate limiting to prevent subdomain enumeration attacks
+4. Create Current.webstead thread-safe accessor
+   - New file: app/models/current.rb
+   - Use ActiveSupport::CurrentAttributes
+   - Add `attribute :webstead` to store current tenant
+   - This provides thread-safe access throughout request lifecycle
 
-6. Test subdomain routing
-   - In test/integration: create test for subdomain routing
-   - Test valid subdomain resolves correct webstead
-   - Test invalid subdomain returns 404
-   - Test reserved subdomains (www, api) are excluded
-   - Test root domain (no subdomain) shows landing page
-   - Use `host` header in requests: `get posts_url, headers: { 'Host': 'alice.webstead.test' }`
+5. Add 404 view for missing websteads
+   - Create app/views/errors/webstead_not_found.html.erb
+   - Simple, friendly message: "Webstead not found. This site doesn't exist yet."
+   - Link to signup page (future step)
+   - Style with Tailwind classes
+
+6. Add tests for middleware behavior
+   - Create test/middleware/set_current_webstead_test.rb
+   - Test: valid subdomain sets Current.webstead
+   - Test: invalid subdomain returns 404
+   - Test: custom domain resolves webstead
+   - Test: root domain (no subdomain) skips middleware
+   - Test: Current.webstead is reset between requests
+
+7. Add subdomain routing tests
+   - Update test/routing/posts_routing_test.rb
+   - Test: routes only match with subdomain present
+   - Test: root domain returns 404 or marketing page
+
+8. Test in development environment
+   - Add entries to /etc/hosts: `127.0.0.1 alice.localhost bob.localhost`
+   - Start Rails server: `bin/rails server`
+   - Visit http://alice.localhost:3000 (should work if alice webstead exists)
+   - Visit http://nonexistent.localhost:3000 (should show 404)
+   - Verify Current.webstead is set correctly with debugger
+
+9. Add root domain handling (marketing page)
+   - Create app/controllers/marketing_controller.rb
+   - Add route: `root 'marketing#index', constraints: { subdomain: false }`
+   - Simple marketing page explaining Webstead
+   - Link to signup (future step)
+
+10. Update README with local development subdomain setup
+    - Document /etc/hosts entries needed
+    - Explain subdomain routing architecture
+    - Show example URLs for testing
+
+Validation:
+- Create test webstead with subdomain 'alice'
+- Visit http://alice.localhost:3000/posts
+- Verify posts for alice's webstead load
+- Check logs: Current.webstead should be set
+- Visit http://nonexistent.localhost:3000
+- Verify 404 page renders
+- Check root domain (http://localhost:3000) shows marketing page or 404
 """
-backup = "If subdomain constraints don't work in development (localhost doesn't support subdomains), use lvh.me domain which resolves all subdomains to 127.0.0.1, or configure /etc/hosts with manual subdomain entries (alice.webstead.test, bob.webstead.test), or implement path-based tenancy as fallback (/alice/posts instead of alice.webstead.dev/posts)"
+
+backup = """
+If subdomain constraints prove difficult with Rails routing:
+
+1. Use before_action in ApplicationController instead of middleware
+   - Add `before_action :set_current_webstead`
+   - Method extracts subdomain and queries Webstead
+   - Render 404 if webstead not found
+   - Simpler but runs after routing (less efficient)
+
+2. If subdomain extraction is unreliable in development:
+   - Use request.domain and request.subdomain methods
+   - Handle localhost specially: split request.host on '.' and check first segment
+   - Document that Puma must be started with `puma -p 3000` (not rails server with binding restrictions)
+
+3. If thread-safety with Current is an issue:
+   - Use RequestStore gem instead: `RequestStore.store[:webstead] = webstead`
+   - Provides similar thread-safe storage with simpler API
+   - Add to Gemfile: `gem 'request_store'`
+
+4. If custom domain lookup causes performance issues:
+   - Add database index on custom_domain (already exists in migration)
+   - Cache webstead lookups in Redis with TTL
+   - Use Rack::Cache or Rails.cache.fetch around lookup
+"""
 
 [context]
-files = ["config/routes.rb", "config/application.rb", "app/controllers/application_controller.rb", "app/models/current.rb"]
-dependencies = ["Rails routing constraints", "ActiveSupport::CurrentAttributes", "Rack middleware"]
+files = [
+  "config/routes.rb",
+  "app/middleware/set_current_webstead.rb",
+  "app/models/current.rb",
+  "app/controllers/application_controller.rb",
+  "app/views/errors/webstead_not_found.html.erb",
+  "test/middleware/set_current_webstead_test.rb",
+  "config/application.rb",
+  "README.md"
+]
+dependencies = [
+  "ActiveSupport::CurrentAttributes (built-in)",
+  "Rack middleware (built-in)",
+  "/etc/hosts for local subdomain testing"
+]

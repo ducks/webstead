@@ -1,5 +1,5 @@
-what = "Multi-tenant Rails 8 personal site platform with ActivityPub federation and threaded comments"
-why = "Provide makers, artists, and creators with their own federated web presence. Fills gap between static sites and social platforms - you get your own space with built-in federation to the fediverse and threaded discussions without the complexity of self-hosting."
+what = "Multi-tenant Rails 8 personal site platform with announce-only ActivityPub federation and local threaded comments"
+why = "Provide makers, artists, and creators with their own federated web presence. v1 focuses on announce-only federation (posts federate OUT to Mastodon, comments stay LOCAL) - simpler implementation, faster to ship, achieves core goal of content distribution without complexity of full ActivityPub server."
 
 [[steps]]
 order = 1
@@ -63,72 +63,60 @@ depends_on = ["post-controller"]
 
 [[steps]]
 order = 11
-name = "activitypub-outbox"
-summary = "Create ActivityPub::OutboxController to serve Actor object and OrderedCollection at /.well-known/webfinger and /outbox"
+name = "user-authentication"
+summary = "Generate User model with has_secure_password, add sessions controller for login/logout, build signup/login views with Rails 8 authentication patterns"
 depends_on = ["comment-controller"]
 
 [[steps]]
 order = 12
-name = "activitypub-publisher"
-summary = "Build ActivityPub::Publisher service to generate Create activities (Note objects) for published posts with proper JSON-LD context"
-depends_on = ["activitypub-outbox"]
+name = "webfinger-endpoint"
+summary = "Implement /.well-known/webfinger endpoint to return JSON with actor URI when queried for acct:username@webstead.dev"
+depends_on = ["user-authentication"]
 
 [[steps]]
 order = 13
-name = "federation-job"
-summary = "Create FederatePostJob to deliver ActivityPub activities to follower inboxes (start with Mastodon instance for testing)"
-depends_on = ["activitypub-publisher"]
-
-[[steps]]
-order = 14
-name = "webfinger-endpoint"
-summary = "Implement /.well-known/webfinger endpoint to respond with Actor URI when queried by remote servers"
-depends_on = ["federation-job"]
-
-[[steps]]
-order = 15
-name = "markdown-rendering"
-summary = "Add markdown gem (redcarpet or commonmarker), build helper to safely render post/comment markdown with syntax highlighting"
+name = "activitypub-actor"
+summary = "Create ActivityPub::ActorSerializer to generate JSON-LD Actor document (Person type) with inbox, outbox, public key at /u/:username or /actor"
 depends_on = ["webfinger-endpoint"]
 
 [[steps]]
+order = 14
+name = "follower-model"
+summary = "Create Follower model to store follower actor URIs (webstead_id, actor_uri, inbox_url, shared_inbox_url, accepted_at)"
+depends_on = ["activitypub-actor"]
+
+[[steps]]
+order = 15
+name = "activitypub-inbox"
+summary = "Create ActivityPub::InboxController to accept Follow activities, store followers, respond with Accept activity. Reject all other activity types with 501 for v1."
+depends_on = ["follower-model"]
+
+[[steps]]
 order = 16
-name = "threading-ui"
-summary = "Build nested comment rendering with indentation, collapse/expand controls, Reddit-style threading with visual guides"
-depends_on = ["markdown-rendering"]
+name = "activitypub-outbox"
+summary = "Create ActivityPub::OutboxController to serve OrderedCollection of Create(Note) activities for published posts, paginated (30 per page)"
+depends_on = ["activitypub-inbox"]
 
 [[steps]]
 order = 17
-name = "authentication-system"
-summary = "Implement Rails 8 built-in authentication (or minimal Devise setup) with signup, login, password reset, session management"
-depends_on = ["threading-ui"]
+name = "http-signatures"
+summary = "Implement HTTP Signatures service to sign outgoing POST requests with RSA private key (generate keypair for each webstead, store in database)"
+depends_on = ["activitypub-outbox"]
 
 [[steps]]
 order = 18
-name = "webstead-creation"
-summary = "Build webstead creation flow - user signs up, claims subdomain, webstead is provisioned with default settings"
-depends_on = ["authentication-system"]
+name = "federation-delivery-job"
+summary = "Create FederatePostJob to deliver Create activities to all follower inboxes with HTTP Signatures, retry logic (3 attempts), error logging"
+depends_on = ["http-signatures"]
 
 [[steps]]
 order = 19
-name = "post-drafts"
-summary = "Add draft/published state to posts, build draft management UI, add publish action that triggers federation job"
-depends_on = ["webstead-creation"]
+name = "webstead-creation-flow"
+summary = "Build webstead creation flow - user signs up, claims subdomain, webstead provisioned, keypair generated, actor document created"
+depends_on = ["federation-delivery-job"]
 
 [[steps]]
 order = 20
-name = "mvp-polish"
-summary = "Add error handling, validation messages, loading states, basic styling polish, ensure subdomain isolation works correctly"
-depends_on = ["post-drafts"]
-
-[[steps]]
-order = 21
-name = "deployment-prep"
-summary = "Configure production database, set up subdomain wildcard DNS (*.webstead.dev), prepare Dockerfile/deployment config"
-depends_on = ["mvp-polish"]
-
-[[steps]]
-order = 22
-name = "mvp-deploy"
-summary = "Deploy MVP to production, test federation with real Mastodon instance, validate multi-tenant isolation, monitor for issues"
-depends_on = ["deployment-prep"]
+name = "production-deployment"
+summary = "Configure Kamal deployment, set up wildcard DNS (*.webstead.dev), Let's Encrypt SSL, test federation with real Mastodon instance, validate multi-tenant isolation"
+depends_on = ["webstead-creation-flow"]

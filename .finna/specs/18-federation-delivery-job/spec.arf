@@ -1,0 +1,31 @@
+I've created a detailed spec for implementing the FederatePostJob that handles ActivityPub federation delivery. Here's what the spec covers:
+
+**Core functionality:**
+- Background job that delivers Create(Note) activities to follower inboxes
+- Exponential backoff retry logic (3 attempts: 3s, 18s, 83s)
+- HTTP Signatures for request authentication
+- Batch delivery to all accepted followers
+
+**Key implementation steps:**
+1. Generate ActiveJob with retry configuration
+2. Build ActivityPub-compliant Create(Note) JSON structure
+3. Render markdown to HTML using kramdown
+4. Deliver to each follower's inbox (prefer shared_inbox for efficiency)
+5. Sign requests with HttpSignatureService from step 17
+6. Comprehensive error handling and logging per follower
+7. Post model callbacks to auto-enqueue on publish
+8. Full test coverage with webmock for HTTP stubbing
+
+**Smart delivery logic:**
+- Early returns for draft posts or empty follower lists
+- Prefers shared_inbox_url over individual inbox_url (efficiency)
+- Per-follower error handling (one failure doesn't fail entire job)
+- Success/failure logging with summary counts
+
+**Backup plans include:**
+- Debugging strategies for signature verification issues
+- Idempotency handling for retry scenarios
+- Batching strategies for large follower counts
+- Content sanitization approaches for markdown rendering
+
+This completes the announce-only federation delivery pipeline. When combined with steps 13-17 (WebFinger, Actor, Follower model, Inbox, Outbox, HTTP Signatures), this creates a working one-way federation system where webstead posts appear on Mastodon.
