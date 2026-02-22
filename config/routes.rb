@@ -9,6 +9,9 @@ Rails.application.routes.draw do
   # get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
 
+  # WebFinger endpoint for ActivityPub discovery
+  get "/.well-known/webfinger", to: "well_known/webfinger#show"
+
   # Authentication routes
   get "signup", to: "registrations#new"
   post "signup", to: "registrations#create"
