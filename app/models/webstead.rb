@@ -51,10 +51,38 @@ class Webstead < ApplicationRecord
   # Normalize subdomain and custom_domain to lowercase before validation
   before_validation :normalize_domains
 
+  # Generate RSA keypair after creation
+  after_create :generate_keypair
+
+  # ActivityPub actor URI
+  def actor_uri
+    "#{url}/actor"
+  end
+
+  # Parse private key from PEM
+  def private_key
+    OpenSSL::PKey::RSA.new(private_key_pem) if private_key_pem.present?
+  end
+
+  # Parse public key from PEM
+  def public_key
+    OpenSSL::PKey::RSA.new(public_key_pem) if public_key_pem.present?
+  end
+
   private
 
   def normalize_domains
     self.subdomain = subdomain.downcase if subdomain.present?
     self.custom_domain = custom_domain.downcase if custom_domain.present?
+  end
+
+  def generate_keypair
+    return if private_key_pem.present? # Already has keys
+
+    rsa_key = OpenSSL::PKey::RSA.new(2048)
+    update_columns(
+      private_key_pem: rsa_key.to_pem,
+      public_key_pem: rsa_key.public_key.to_pem
+    )
   end
 end
