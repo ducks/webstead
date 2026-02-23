@@ -24,8 +24,14 @@ class CommentsController < ApplicationController
   private
 
   def set_parent
-    if params[:comment][:parent_type] && params[:comment][:parent_id]
-      @parent = params[:comment][:parent_type].constantize.find(params[:comment][:parent_id])
+    parent_type = params[:comment][:parent_type]
+    parent_id = params[:comment][:parent_id]
+
+    # Whitelist allowed parent types to prevent RCE via constantize
+    allowed_types = ["Post", "Comment"]
+
+    if parent_type.in?(allowed_types) && parent_id.present?
+      @parent = parent_type.constantize.find(parent_id)
     else
       redirect_to root_path, alert: "Invalid comment parent"
     end
