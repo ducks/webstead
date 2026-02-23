@@ -21,7 +21,7 @@ module ActivityPub
         publicKey: {
           id: "#{@webstead.actor_uri}#main-key",
           owner: @webstead.actor_uri,
-          publicKeyPem: @webstead.public_key
+          publicKeyPem: @webstead.public_key_pem
         }
       }.compact
     end

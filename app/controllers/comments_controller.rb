@@ -29,10 +29,10 @@ class CommentsController < ApplicationController
 
     # Whitelist allowed parent types to prevent RCE via constantize
     klass = case parent_type
-            when "Post" then Post
-            when "Comment" then Comment
-            else nil
-            end
+    when "Post" then Post
+    when "Comment" then Comment
+    else nil
+    end
 
     if klass && parent_id.present?
       @parent = klass.find(parent_id)

@@ -23,11 +23,21 @@ Rails.application.routes.draw do
   get "/@:username/outbox", to: "activitypub/outbox#show"
 
   # Authentication routes
-  get "signup", to: "registrations#new"
-  post "signup", to: "registrations#create"
+  get "signup", to: "websteads#new"
   get "login", to: "sessions#new"
   post "login", to: "sessions#create"
   delete "logout", to: "sessions#destroy"
+
+  # Webstead creation and management
+  resources :websteads, only: [ :new, :create ] do
+    member do
+      get :provisioning
+    end
+    collection do
+      get :check_availability
+    end
+  end
+  get "dashboard", to: "websteads#dashboard"
 
   # Posts routes (scoped to webstead via TenantScoped concern)
   resources :posts, only: [ :index, :show, :new, :create, :edit, :update ]

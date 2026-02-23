@@ -171,8 +171,8 @@ module ActivityPub
       ActivityPub::DeliveryJob.perform_later(
         activity: accept_activity,
         inbox_url: inbox_url,
-        signing_key: @webstead.private_key,
-        signing_key_id: "https://#{@webstead.primary_domain}/users/#{@user.username}#main-key"
+        signing_key: @webstead.private_key_pem,
+        signing_key_id: @webstead.actor_public_key_id
       )
 
       Rails.logger.info("[ActivityPub] Follow accepted from #{actor_uri} for #{@user.username}")
