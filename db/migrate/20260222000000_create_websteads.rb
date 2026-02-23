@@ -1,7 +1,7 @@
 class CreateWebsteads < ActiveRecord::Migration[8.0]
   def change
     create_table :websteads do |t|
-      t.references :user, null: false, foreign_key: true, index: { unique: true }
+      t.references :user, null: true, foreign_key: false, index: { unique: true }
       t.string :subdomain, null: false, limit: 63
       t.string :custom_domain, limit: 253
       t.jsonb :settings, null: false, default: {}

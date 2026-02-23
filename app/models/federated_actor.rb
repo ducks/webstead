@@ -18,14 +18,14 @@ class FederatedActor < ApplicationRecord
       return nil unless actor_data
 
       actor.assign_attributes(
-        actor_type: actor_data['type'],
-        inbox_url: actor_data['inbox'],
-        shared_inbox_url: actor_data.dig('endpoints', 'sharedInbox'),
-        username: actor_data['preferredUsername'],
+        actor_type: actor_data["type"],
+        inbox_url: actor_data["inbox"],
+        shared_inbox_url: actor_data.dig("endpoints", "sharedInbox"),
+        username: actor_data["preferredUsername"],
         domain: URI.parse(actor_uri).host,
-        display_name: actor_data['name'],
-        avatar_url: actor_data.dig('icon', 'url'),
-        public_key: actor_data.dig('publicKey', 'publicKeyPem'),
+        display_name: actor_data["name"],
+        avatar_url: actor_data.dig("icon", "url"),
+        public_key: actor_data.dig("publicKey", "publicKeyPem"),
         actor_data: actor_data,
         last_fetched_at: Time.current
       )
@@ -40,9 +40,9 @@ class FederatedActor < ApplicationRecord
 
   def self.fetch_actor_document(actor_uri)
     uri = URI.parse(actor_uri)
-    response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+    response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
       request = Net::HTTP::Get.new(uri.request_uri)
-      request['Accept'] = 'application/activity+json, application/ld+json'
+      request["Accept"] = "application/activity+json, application/ld+json"
       http.request(request)
     end
 

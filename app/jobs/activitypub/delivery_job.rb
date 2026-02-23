@@ -8,11 +8,11 @@ module ActivityPub
     def perform(activity:, inbox_url:, signing_key:, signing_key_id:)
       uri = URI.parse(inbox_url)
       http = Net::HTTP.new(uri.host, uri.port)
-      http.use_ssl = (uri.scheme == 'https')
+      http.use_ssl = (uri.scheme == "https")
 
       request = Net::HTTP::Post.new(uri.request_uri)
-      request['Content-Type'] = 'application/activity+json'
-      request['Accept'] = 'application/activity+json'
+      request["Content-Type"] = "application/activity+json"
+      request["Accept"] = "application/activity+json"
       request.body = activity.to_json
 
       # Sign request using HTTP Signatures service
