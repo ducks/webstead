@@ -1,5 +1,6 @@
 class Webstead < ApplicationRecord
   belongs_to :user, optional: true
+  has_many :followers, dependent: :destroy
 
   # Reserved subdomains that cannot be registered
   RESERVED_SUBDOMAINS = %w[
