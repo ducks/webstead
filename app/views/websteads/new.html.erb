@@ -1,0 +1,71 @@
+<div class="max-w-md mx-auto mt-10 p-6 bg-white rounded-lg shadow-md">
+  <h2 class="text-2xl font-bold mb-6 text-gray-900">Create Your Webstead</h2>
+  <p class="text-sm text-gray-600 mb-6">Claim your corner of the web. Your webstead will be federated and accessible across the fediverse.</p>
+
+  <%= form_with(scope: :root, url: websteads_path, class: "space-y-4", data: { turbo: false }) do |f| %>
+    <% if @webstead.errors.any? %>
+      <div id="error_explanation" class="bg-red-50 p-4 rounded-md">
+        <h2 class="text-red-800 text-sm font-medium"><%= pluralize(@webstead.errors.count, "error") %> prohibited this webstead from being created:</h2>
+        <ul class="mt-2 list-disc list-inside text-sm text-red-700">
+          <% @webstead.errors.full_messages.each do |message| %>
+            <li><%= message %></li>
+          <% end %>
+        </ul>
+      </div>
+    <% end %>
+
+    <div>
+      <%= label_tag "user_email", "Email", class: "block text-sm font-medium text-gray-700" %>
+      <%= email_field_tag "user[email]", @user.email, required: true, class: "mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
+    </div>
+
+    <div>
+      <%= label_tag "user_username", "Username", class: "block text-sm font-medium text-gray-700" %>
+      <%= text_field_tag "user[username]", @user.username, required: true, class: "mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
+      <p class="mt-1 text-sm text-gray-500">3-30 characters, letters, numbers, and underscores only</p>
+    </div>
+
+    <div>
+      <%= label_tag "user_password", "Password", class: "block text-sm font-medium text-gray-700" %>
+      <%= password_field_tag "user[password]", nil, required: true, class: "mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
+      <p class="mt-1 text-sm text-gray-500">Minimum 8 characters</p>
+    </div>
+
+    <div>
+      <%= label_tag "user_password_confirmation", "Confirm Password", class: "block text-sm font-medium text-gray-700" %>
+      <%= password_field_tag "user[password_confirmation]", nil, required: true, class: "mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
+    </div>
+
+    <div class="pt-4 border-t border-gray-200">
+      <h3 class="text-lg font-medium text-gray-900 mb-4">Choose Your Subdomain</h3>
+      
+      <div>
+        <%= label_tag "webstead_subdomain", "Subdomain", class: "block text-sm font-medium text-gray-700" %>
+        <div class="mt-1 flex rounded-md shadow-sm">
+          <%= text_field_tag "webstead[subdomain]", @webstead.subdomain, 
+                required: true,
+                data: { 
+                  controller: "subdomain-check",
+                  action: "input->subdomain-check#check",
+                  subdomain_check_url_value: check_availability_websteads_path
+                },
+                class: "block w-full border-gray-300 rounded-l-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
+          <span class="inline-flex items-center px-3 rounded-r-md border border-l-0 border-gray-300 bg-gray-50 text-gray-500 sm:text-sm">
+            .webstead.dev
+          </span>
+        </div>
+        <div id="subdomain-availability" class="mt-2" data-subdomain-check-target="message"></div>
+      </div>
+    </div>
+
+    <div>
+      <%= submit_tag "Create Webstead", class: "w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+    </div>
+  <% end %>
+
+  <div class="mt-6 text-center">
+    <p class="text-sm text-gray-600">
+      Already have an account? <%= link_to "Log in", login_path, class: "font-medium text-indigo-600 hover:text-indigo-500" %>
+    </p>
+  </div>
+</div>

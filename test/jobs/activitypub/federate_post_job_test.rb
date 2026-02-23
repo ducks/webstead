@@ -140,7 +140,7 @@ module ActivityPub
         status: "draft"
       )
 
-      assert_enqueued_with(job: FederatePostJob, args: [draft_post.id]) do
+      assert_enqueued_with(job: FederatePostJob, args: [ draft_post.id ]) do
         draft_post.update!(status: "published", published_at: Time.current)
       end
     end

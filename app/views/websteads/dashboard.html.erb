@@ -1,0 +1,56 @@
+<div class="max-w-4xl mx-auto mt-10 p-6">
+  <div class="bg-white rounded-lg shadow-md p-8">
+    <h1 class="text-3xl font-bold mb-6 text-gray-900">Your Webstead Dashboard</h1>
+
+    <div class="bg-indigo-50 p-6 rounded-md mb-6">
+      <h2 class="text-xl font-semibold text-indigo-900 mb-2">Your Webstead URL</h2>
+      <p class="text-2xl font-mono text-indigo-700">
+        <%= link_to @webstead.url, @webstead.url, class: "hover:underline", target: "_blank" %>
+      </p>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4 mb-6">
+      <div class="bg-gray-50 p-4 rounded-md">
+        <h3 class="text-sm font-medium text-gray-600">Posts</h3>
+        <p class="text-3xl font-bold text-gray-900"><%= @webstead.posts.published.count %></p>
+      </div>
+      <div class="bg-gray-50 p-4 rounded-md">
+        <h3 class="text-sm font-medium text-gray-600">Followers</h3>
+        <p class="text-3xl font-bold text-gray-900"><%= @webstead.followers.accepted.count %></p>
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <%= link_to "Create Your First Post", new_post_path, class: "inline-block w-full py-3 px-4 border border-transparent rounded-md shadow-sm text-center text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+      
+      <%= link_to "View Your Public Webstead", root_path, class: "inline-block w-full py-3 px-4 border border-gray-300 rounded-md shadow-sm text-center text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+    </div>
+
+    <div class="mt-8 pt-6 border-t border-gray-200">
+      <h3 class="text-lg font-medium text-gray-900 mb-4">Federation Status</h3>
+      <div class="space-y-2">
+        <div class="flex items-center">
+          <svg class="h-5 w-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+          </svg>
+          <span class="text-sm text-gray-700">Keypair generated</span>
+        </div>
+        <div class="flex items-center">
+          <svg class="h-5 w-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+          </svg>
+          <span class="text-sm text-gray-700">ActivityPub enabled</span>
+        </div>
+        <div class="flex items-center">
+          <svg class="h-5 w-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+          </svg>
+          <span class="text-sm text-gray-700">Federated to Mastodon</span>
+        </div>
+      </div>
+      <p class="mt-4 text-sm text-gray-600">
+        Your webstead can be followed from Mastodon by searching for <span class="font-mono">@<%= @webstead.subdomain %>@webstead.dev</span>
+      </p>
+    </div>
+  </div>
+</div>

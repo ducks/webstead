@@ -2,6 +2,8 @@ class Webstead < ApplicationRecord
   belongs_to :user, optional: true
   has_many :followers, dependent: :destroy
 
+  encrypts :private_key_pem
+
   # Reserved subdomains that cannot be registered
   RESERVED_SUBDOMAINS = %w[
     www api admin app dashboard blog forum mail email
@@ -32,6 +34,7 @@ class Webstead < ApplicationRecord
                             }
 
   validates :user_id, uniqueness: true
+  validates :private_key_pem, :public_key_pem, presence: true, on: :update
 
   # Settings accessor for jsonb column
   store_accessor :settings, :theme, :analytics_id, :custom_css
@@ -53,8 +56,9 @@ class Webstead < ApplicationRecord
   def generate_keypair!
     keypair = OpenSSL::PKey::RSA.new(2048)
     update!(
-      private_key: keypair.to_pem,
-      public_key: keypair.public_key.to_pem
+      private_key_pem: keypair.to_pem,
+      public_key_pem: keypair.public_key.to_pem,
+      rotated_at: Time.current
     )
   end
 
@@ -69,14 +73,24 @@ class Webstead < ApplicationRecord
     "#{url}/actor"
   end
 
+  # ActivityPub public key ID
+  def actor_public_key_id
+    "#{actor_uri}#main-key"
+  end
+
   # Parse private key from PEM string
   def private_key_object
-    OpenSSL::PKey::RSA.new(private_key) if private_key.present?
+    OpenSSL::PKey::RSA.new(private_key_pem) if private_key_pem.present?
   end
 
   # Parse public key from PEM string
   def public_key_object
-    OpenSSL::PKey::RSA.new(public_key) if public_key.present?
+    OpenSSL::PKey::RSA.new(public_key_pem) if public_key_pem.present?
+  end
+
+  # Future-proofing: stub for key rotation
+  def rotate_keypair!
+    generate_keypair!
   end
 
   private
@@ -87,12 +101,13 @@ class Webstead < ApplicationRecord
   end
 
   def generate_keypair
-    return if private_key.present? # Already has keys
+    return if private_key_pem.present? # Already has keys
 
     rsa_key = OpenSSL::PKey::RSA.new(2048)
     update_columns(
-      private_key: rsa_key.to_pem,
-      public_key: rsa_key.public_key.to_pem
+      private_key_pem: rsa_key.to_pem,
+      public_key_pem: rsa_key.public_key.to_pem,
+      rotated_at: Time.current
     )
   end
 end
