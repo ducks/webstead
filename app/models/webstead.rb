@@ -69,14 +69,14 @@ class Webstead < ApplicationRecord
     "#{url}/actor"
   end
 
-  # Parse private key from PEM
-  def private_key
-    OpenSSL::PKey::RSA.new(private_key_pem) if private_key_pem.present?
+  # Parse private key from PEM string
+  def private_key_object
+    OpenSSL::PKey::RSA.new(private_key) if private_key.present?
   end
 
-  # Parse public key from PEM
-  def public_key
-    OpenSSL::PKey::RSA.new(public_key_pem) if public_key_pem.present?
+  # Parse public key from PEM string
+  def public_key_object
+    OpenSSL::PKey::RSA.new(public_key) if public_key.present?
   end
 
   private
@@ -87,12 +87,12 @@ class Webstead < ApplicationRecord
   end
 
   def generate_keypair
-    return if private_key_pem.present? # Already has keys
+    return if private_key.present? # Already has keys
 
     rsa_key = OpenSSL::PKey::RSA.new(2048)
     update_columns(
-      private_key_pem: rsa_key.to_pem,
-      public_key_pem: rsa_key.public_key.to_pem
+      private_key: rsa_key.to_pem,
+      public_key: rsa_key.public_key.to_pem
     )
   end
 end

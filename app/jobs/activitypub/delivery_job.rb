@@ -13,19 +13,10 @@ module ActivityPub
       request = Net::HTTP::Post.new(uri.request_uri)
       request['Content-Type'] = 'application/activity+json'
       request['Accept'] = 'application/activity+json'
-      request['Date'] = Time.now.utc.httpdate
-      request['Host'] = uri.host
+      request.body = activity.to_json
 
-      body = activity.to_json
-      request.body = body
-
-      # Generate digest
-      digest = Digest::SHA256.base64digest(body)
-      request['Digest'] = "SHA-256=#{digest}"
-
-      # Sign request
-      signature = sign_request(request, uri, signing_key, signing_key_id)
-      request['Signature'] = signature
+      # Sign request using HTTP Signatures service
+      ActivityPub::HttpSignatureService.sign(request, uri, signing_key_id, signing_key)
 
       response = http.request(request)
 
@@ -41,21 +32,5 @@ module ActivityPub
     end
 
     private
-
-    def sign_request(request, uri, private_key_pem, key_id)
-      headers = '(request-target) host date digest'
-      signing_string = [
-        "(request-target): post #{uri.request_uri}",
-        "host: #{request['Host']}",
-        "date: #{request['Date']}",
-        "digest: #{request['Digest']}"
-      ].join("\n")
-
-      private_key = OpenSSL::PKey::RSA.new(private_key_pem)
-      signature = private_key.sign(OpenSSL::Digest::SHA256.new, signing_string)
-      signature_base64 = Base64.strict_encode64(signature)
-
-      "keyId=\"#{key_id}\",headers=\"#{headers}\",signature=\"#{signature_base64}\""
-    end
   end
 end
