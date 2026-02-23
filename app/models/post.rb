@@ -44,7 +44,17 @@ class Post < ApplicationRecord
     published_at.present? && published_at > Time.current
   end
 
+  after_commit :enqueue_federation, on: [ :create, :update ], if: :should_federate?
+
   private
+
+  def should_federate?
+    saved_change_to_published_at? && published?
+  end
+
+  def enqueue_federation
+    ActivityPub::FederatePostJob.perform_later(id)
+  end
 
   def published_posts_must_have_timestamp
     if published_at.present? && published_at <= Time.current && body.blank?
