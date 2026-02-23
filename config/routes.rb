@@ -19,8 +19,8 @@ Rails.application.routes.draw do
   # ActivityPub Inbox endpoint
   post "/users/:username/inbox", to: "activitypub/inbox#create"
 
-  # ActivityPub Inbox endpoint
-  post "/users/:username/inbox", to: "activitypub/inbox#create"
+  # ActivityPub Outbox endpoint
+  get "/@:username/outbox", to: "activitypub/outbox#show"
 
   # Authentication routes
   get "signup", to: "registrations#new"
