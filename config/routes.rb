@@ -16,6 +16,12 @@ Rails.application.routes.draw do
   get "/actor", to: "activitypub/actors#show"
   get "/u/:username", to: "activitypub/actors#show"
 
+  # ActivityPub Inbox endpoint
+  post "/users/:username/inbox", to: "activitypub/inbox#create"
+
+  # ActivityPub Inbox endpoint
+  post "/users/:username/inbox", to: "activitypub/inbox#create"
+
   # Authentication routes
   get "signup", to: "registrations#new"
   post "signup", to: "registrations#create"

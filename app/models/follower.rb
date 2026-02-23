@@ -2,29 +2,35 @@ class Follower < ApplicationRecord
   include TenantScoped
 
   belongs_to :webstead
+  belongs_to :federated_actor
 
-  validates :actor_uri, presence: true,
-                        format: { with: URI::DEFAULT_PARSER.make_regexp(%w[http https]),
-                                 message: "must be a valid HTTP(S) URL" },
-                        uniqueness: { scope: :webstead_id,
-                                     message: "is already following this webstead" }
-  validates :inbox_url, presence: true,
-                       format: { with: URI::DEFAULT_PARSER.make_regexp(%w[http https]) }
-  validates :shared_inbox_url, format: { with: URI::DEFAULT_PARSER.make_regexp(%w[http https]),
-                                        allow_blank: true }
+  validates :federated_actor_id, presence: true,
+                                 uniqueness: { scope: :webstead_id,
+                                              message: "is already following this webstead" }
+  validates :status, presence: true,
+                     inclusion: { in: %w[pending accepted rejected] }
 
-  scope :accepted, -> { where.not(accepted_at: nil) }
-  scope :pending, -> { where(accepted_at: nil) }
+  scope :accepted, -> { where(status: "accepted") }
+  scope :pending, -> { where(status: "pending") }
+  scope :rejected, -> { where(status: "rejected") }
 
   def accepted?
-    accepted_at.present?
+    status == "accepted"
   end
 
   def pending?
-    accepted_at.nil?
+    status == "pending"
+  end
+
+  def rejected?
+    status == "rejected"
   end
 
   def accept!
-    update!(accepted_at: Time.current)
+    update!(status: "accepted", accepted_at: Time.current)
+  end
+
+  def reject!
+    update!(status: "rejected")
   end
 end

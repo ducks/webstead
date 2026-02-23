@@ -49,6 +49,15 @@ class Webstead < ApplicationRecord
     subdomain
   end
 
+  # Generate RSA keypair for ActivityPub signatures
+  def generate_keypair!
+    keypair = OpenSSL::PKey::RSA.new(2048)
+    update!(
+      private_key: keypair.to_pem,
+      public_key: keypair.public_key.to_pem
+    )
+  end
+
   # Normalize subdomain and custom_domain to lowercase before validation
   before_validation :normalize_domains
 
