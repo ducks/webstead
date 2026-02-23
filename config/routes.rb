@@ -12,6 +12,10 @@ Rails.application.routes.draw do
   # WebFinger endpoint for ActivityPub discovery
   get "/.well-known/webfinger", to: "well_known/webfinger#show"
 
+  # ActivityPub Actor endpoint
+  get "/actor", to: "activitypub/actors#show"
+  get "/u/:username", to: "activitypub/actors#show"
+
   # Authentication routes
   get "signup", to: "registrations#new"
   post "signup", to: "registrations#create"
