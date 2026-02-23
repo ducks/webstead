@@ -45,6 +45,7 @@ pkgs.mkShell {
     echo ""
 
     export PGDATA="$PWD/tmp/postgres"
+    export PGHOST="$PWD/tmp/postgres-socket"
     export REDIS_URL="redis://localhost:6379/0"
     export GEM_HOME="$PWD/.gems"
     export GEM_PATH="$GEM_HOME"
@@ -68,11 +69,51 @@ pkgs.mkShell {
     fi
     echo ""
 
-    echo "Setup instructions:"
-    echo "1. Install Rails: gem install rails"
-    echo "2. Create Rails app: rails new . --database=postgresql --css=tailwind --skip-test --force"
-    echo "3. Run 'bundle install' to install additional gems"
-    echo "4. Run 'rails db:create' to create databases"
-    echo "5. Run 'rails server' to start the application"
+    # PostgreSQL helper functions
+    function pg_start() {
+      mkdir -p "$PWD/tmp/postgres-socket"
+      if [ -d "$PGDATA" ]; then
+        pg_ctl -D "$PGDATA" -l "$PGDATA/server.log" -o "-k $PWD/tmp/postgres-socket" start
+        echo "PostgreSQL started (socket: $PWD/tmp/postgres-socket)"
+      else
+        echo "Initializing PostgreSQL database..."
+        initdb -D "$PGDATA" --no-locale --encoding=UTF8
+        pg_ctl -D "$PGDATA" -l "$PGDATA/server.log" -o "-k $PWD/tmp/postgres-socket" start
+        echo "PostgreSQL started (socket: $PWD/tmp/postgres-socket)"
+      fi
+    }
+
+    function pg_stop() {
+      pg_ctl -D "$PGDATA" stop
+      echo "PostgreSQL stopped"
+    }
+
+    function pg_status() {
+      pg_ctl -D "$PGDATA" status
+    }
+
+    # Redis helper functions
+    function redis_start() {
+      redis-server --daemonize yes --dir "$PWD/tmp" --dbfilename redis.rdb
+      echo "Redis started (daemonized)"
+    }
+
+    function redis_stop() {
+      redis-cli shutdown
+      echo "Redis stopped"
+    }
+
+    echo "Helper functions available:"
+    echo "  pg_start      - Start PostgreSQL"
+    echo "  pg_stop       - Stop PostgreSQL"
+    echo "  pg_status     - Check PostgreSQL status"
+    echo "  redis_start   - Start Redis"
+    echo "  redis_stop    - Stop Redis"
+    echo ""
+    echo "Quick start:"
+    echo "  1. pg_start && redis_start"
+    echo "  2. bundle install"
+    echo "  3. rails db:create db:migrate"
+    echo "  4. rails server"
   '';
 }

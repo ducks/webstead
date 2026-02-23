@@ -9,6 +9,6 @@ class CreateFollowers < ActiveRecord::Migration[8.0]
       t.timestamps
     end
 
-    add_index :followers, [:webstead_id, :federated_actor_id], unique: true, name: 'index_followers_on_webstead_and_actor'
+    add_index :followers, [ :webstead_id, :federated_actor_id ], unique: true, name: 'index_followers_on_webstead_and_actor'
   end
 end

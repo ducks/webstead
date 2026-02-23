@@ -60,7 +60,7 @@ module WellKnown
 
       assert_response :bad_request
       json = JSON.parse(response.body)
-      assert_match(/Invalid resource format/, json["error"]
+      assert_match(/Invalid resource format/, json["error"])
     end
 
     test "should return 400 for resource without domain" do

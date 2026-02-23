@@ -18,18 +18,18 @@ module ActivityPub
 
     def set_webstead
       @webstead = Webstead.find_by(subdomain: params[:username])
-      return head :not_found unless @webstead
+      head :not_found unless @webstead
     end
 
     def render_collection(total_items)
       render json: {
-        '@context': 'https://www.w3.org/ns/activitystreams',
+        '@context': "https://www.w3.org/ns/activitystreams",
         id: outbox_url,
-        type: 'OrderedCollection',
+        type: "OrderedCollection",
         totalItems: total_items,
         first: page_url(1),
         last: page_url(last_page_number(total_items))
-      }, content_type: 'application/activity+json'
+      }, content_type: "application/activity+json"
     end
 
     def render_page(posts, total_items)
@@ -40,9 +40,9 @@ module ActivityPub
       last_page = last_page_number(total_items)
 
       response = {
-        '@context': 'https://www.w3.org/ns/activitystreams',
+        '@context': "https://www.w3.org/ns/activitystreams",
         id: page_url(page_number),
-        type: 'OrderedCollectionPage',
+        type: "OrderedCollectionPage",
         partOf: outbox_url,
         orderedItems: paginated_posts.map { |post| create_activity(post) }
       }
@@ -50,18 +50,18 @@ module ActivityPub
       response[:next] = page_url(page_number + 1) if page_number < last_page
       response[:prev] = page_url(page_number - 1) if page_number > 1
 
-      render json: response, content_type: 'application/activity+json'
+      render json: response, content_type: "application/activity+json"
     end
 
     def create_activity(post)
       {
-        '@context': 'https://www.w3.org/ns/activitystreams',
+        '@context': "https://www.w3.org/ns/activitystreams",
         id: "#{post_url(post)}#activity",
-        type: 'Create',
+        type: "Create",
         actor: actor_url,
         published: post.published_at.iso8601,
-        to: ['https://www.w3.org/ns/activitystreams#Public'],
-        cc: ["#{actor_url}/followers"],
+        to: [ "https://www.w3.org/ns/activitystreams#Public" ],
+        cc: [ "#{actor_url}/followers" ],
         object: note_object(post)
       }
     end
@@ -69,7 +69,7 @@ module ActivityPub
     def note_object(post)
       {
         id: post_url(post),
-        type: 'Note',
+        type: "Note",
         attributedTo: actor_url,
         content: Kramdown::Document.new(post.body).to_html,
         published: post.published_at.iso8601,

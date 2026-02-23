@@ -15,24 +15,24 @@ module ActivityPub
 
     def sign(request, uri)
       # Add required headers
-      request['Date'] = Time.now.utc.httpdate
-      request['Host'] = uri.host
+      request["Date"] = Time.now.utc.httpdate
+      request["Host"] = uri.host
 
       # Add Digest header for POST requests
       if request.is_a?(Net::HTTP::Post)
-        body = request.body || ''
+        body = request.body || ""
         digest = Digest::SHA256.base64digest(body)
-        request['Digest'] = "SHA-256=#{digest}"
+        request["Digest"] = "SHA-256=#{digest}"
       end
 
       # Build headers list for signature
-      headers = ['(request-target)', 'host', 'date']
-      headers << 'digest' if request['Digest'].present?
+      headers = [ "(request-target)", "host", "date" ]
+      headers << "digest" if request["Digest"].present?
 
       # Build signing string
       signing_string = headers.map do |header|
         case header
-        when '(request-target)'
+        when "(request-target)"
           "(request-target): #{request.method.downcase} #{uri.request_uri}"
         else
           "#{header}: #{request[header]}"
@@ -45,7 +45,7 @@ module ActivityPub
       signature_base64 = Base64.strict_encode64(signature)
 
       # Add Signature header
-      request['Signature'] = "keyId=\"#{@key_id}\",algorithm=\"rsa-sha256\",headers=\"#{headers.join(' ')}\",signature=\"#{signature_base64}\""
+      request["Signature"] = "keyId=\"#{@key_id}\",algorithm=\"rsa-sha256\",headers=\"#{headers.join(' ')}\",signature=\"#{signature_base64}\""
     end
   end
 end
