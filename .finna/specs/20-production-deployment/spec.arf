@@ -145,3 +145,4 @@ dependencies = [
   "Mastodon test instance (local or remote)",
   "Redis for Sidekiq background jobs"
 ]
+outcome = "success"

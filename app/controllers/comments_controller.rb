@@ -1,12 +1,22 @@
 class CommentsController < ApplicationController
+  include ActionView::RecordIdentifier
+  include TenantScoped
+
   before_action :authenticate_user!
   before_action :set_parent
   before_action :authorize_comment!
 
   def create
     @comment = Comment.new(comment_params)
-    @comment.webstead_id = Current.webstead.id
-    @comment.parent = @parent
+    @comment.webstead = Current.webstead
+    @comment.user = current_user
+
+    if @parent.is_a?(Post)
+      @comment.post = @parent
+    elsif @parent.is_a?(Comment)
+      @comment.post = @parent.post
+      @comment.parent = @parent
+    end
 
     if @comment.save
       respond_to do |format|
@@ -27,7 +37,6 @@ class CommentsController < ApplicationController
     parent_type = params[:comment][:parent_type]
     parent_id = params[:comment][:parent_id]
 
-    # Whitelist allowed parent types to prevent RCE via constantize
     klass = case parent_type
     when "Post" then Post
     when "Comment" then Comment
@@ -42,12 +51,15 @@ class CommentsController < ApplicationController
   end
 
   def authorize_comment!
-    unless @parent.webstead_id == Current.webstead.id
+    return if @parent.nil?
+
+    webstead_id = @parent.webstead_id
+    if !Current.webstead || webstead_id != Current.webstead.id
       redirect_to root_path, alert: "You can only comment on content from this webstead"
     end
   end
 
   def comment_params
-    params.require(:comment).permit(:content, :parent_type, :parent_id, :actor_id, :actor_type)
+    params.require(:comment).permit(:body)
   end
 end

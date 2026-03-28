@@ -1,36 +1,43 @@
 class Follower < ApplicationRecord
-  include TenantScoped
-
   belongs_to :webstead
-  belongs_to :federated_actor
 
-  validates :federated_actor_id, presence: true,
-                                 uniqueness: { scope: :webstead_id,
-                                              message: "is already following this webstead" }
-  validates :status, presence: true,
-                     inclusion: { in: %w[pending accepted rejected] }
+  # Tenant isolation: scope all queries to current webstead
+  default_scope -> { where(webstead_id: Current.webstead.id) if Current.webstead }
 
-  scope :accepted, -> { where(status: "accepted") }
-  scope :pending, -> { where(status: "pending") }
-  scope :rejected, -> { where(status: "rejected") }
+  # Auto-assign webstead from Current on creation
+  before_validation :set_webstead_id, on: :create
+
+  validates :actor_uri, presence: true,
+                        format: { with: /\Ahttps?:\/\/.+/,
+                                  message: "must be a valid HTTP(S) URL" },
+                        uniqueness: { scope: :webstead_id,
+                                      message: "is already following this webstead" }
+  validates :inbox_url, presence: true,
+                        format: { with: /\Ahttps?:\/\/.+/,
+                                  message: "must be a valid HTTP(S) URL" }
+  validates :shared_inbox_url, format: { with: /\Ahttps?:\/\/.+/,
+                                         message: "must be a valid HTTP(S) URL",
+                                         allow_blank: true }
+  validates :webstead_id, presence: true
+
+  scope :accepted, -> { where.not(accepted_at: nil) }
+  scope :pending, -> { where(accepted_at: nil) }
 
   def accepted?
-    status == "accepted"
+    accepted_at.present?
   end
 
   def pending?
-    status == "pending"
-  end
-
-  def rejected?
-    status == "rejected"
+    accepted_at.nil?
   end
 
   def accept!
-    update!(status: "accepted", accepted_at: Time.current)
+    update!(accepted_at: Time.current)
   end
 
-  def reject!
-    update!(status: "rejected")
+  private
+
+  def set_webstead_id
+    self.webstead_id ||= Current.webstead&.id
   end
 end

@@ -17,3 +17,4 @@ Step-by-step implementation plan:
    - Store private_key as key.to_pem
    - Store public_key as key.public_key.to_pem
    - Example:
+outcome = "success"

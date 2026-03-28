@@ -176,3 +176,4 @@ dependencies = [
   "Rails 8.1.2 with has_secure_password",
   "ActiveSupport::CurrentAttributes for Current.user"
 ]
+outcome = "success"

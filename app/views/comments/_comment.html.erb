@@ -1,18 +1,18 @@
 <div id="<%= dom_id(comment) %>" class="border-l-2 border-gray-300 pl-4 mb-4">
   <div class="text-sm text-gray-600 mb-2">
-    <strong><%= comment.actor_name %></strong>
+    <strong><%= comment.author_name %></strong>
     <span class="text-gray-400">·</span>
     <time datetime="<%= comment.created_at.iso8601 %>" title="<%= comment.created_at.strftime('%B %d, %Y at %I:%M %p') %>">
       <%= time_ago_in_words(comment.created_at) %> ago
     </time>
-    <% if comment.children.any? %>
+    <% if comment.replies.any? %>
       <span class="text-gray-400">·</span>
-      <span><%= pluralize(comment.children.count, 'reply') %></span>
+      <span><%= pluralize(comment.replies.count, 'reply') %></span>
     <% end %>
   </div>
 
   <div class="prose prose-sm max-w-none mb-3">
-    <%= simple_format(comment.content) %>
+    <%= simple_format(comment.body) %>
   </div>
 
   <button type="button" class="text-sm text-blue-600 hover:text-blue-800" onclick="document.getElementById('reply_form_<%= dom_id(comment) %>').classList.toggle('hidden')">
@@ -23,9 +23,9 @@
     <%= render partial: "comments/form", locals: { parent: comment, comment: Comment.new } %>
   </div>
 
-  <% if comment.children.any? %>
+  <% if comment.replies.any? %>
     <div id="<%= dom_id(comment, :comments) %>" class="mt-4 space-y-4">
-      <% comment.children.order(created_at: :asc).each do |child_comment| %>
+      <% comment.replies.chronological.each do |child_comment| %>
         <%= render partial: "comments/comment", locals: { comment: child_comment } %>
       <% end %>
     </div>

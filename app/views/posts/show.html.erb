@@ -27,4 +27,9 @@
       <p class="text-gray-600 text-center py-8">No comments yet. Be the first to comment!</p>
     <% end %>
   </div>
+
+  <div class="mt-6 pt-6 border-t border-gray-200">
+    <h3 class="text-lg font-semibold text-gray-900 mb-4">Leave a comment</h3>
+    <%= render partial: "comments/form", locals: { parent: @post, comment: Comment.new } %>
+  </div>
 </section>

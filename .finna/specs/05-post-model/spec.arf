@@ -84,3 +84,4 @@ dependencies = [
   "PostgreSQL",
   "TenantScoped concern (from step 3)"
 ]
+outcome = "success"

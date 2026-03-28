@@ -109,3 +109,4 @@ dependencies = [
   "JSON response rendering (Rails built-in)",
   "request.host for domain validation"
 ]
+outcome = "success"

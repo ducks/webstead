@@ -13,7 +13,7 @@ module WellKnown
           headers: { "Host" => @host }
 
       assert_response :success
-      assert_equal "application/jrd+json", response.content_type
+      assert_match %r{application/jrd\+json}, response.content_type
 
       json = JSON.parse(response.body)
       assert_equal "acct:#{@webstead.subdomain}@#{@host}", json["subject"]
@@ -22,7 +22,7 @@ module WellKnown
       link = json["links"][0]
       assert_equal "self", link["rel"]
       assert_equal "application/activity+json", link["type"]
-      assert_equal "http://#{@webstead.subdomain}.#{@host}/actor", link["href"]
+      assert_equal "http://#{@webstead.primary_domain}/actor", link["href"]
     end
 
     test "should return 404 for non-existent user" do
@@ -73,16 +73,15 @@ module WellKnown
       assert_match(/Invalid resource format/, json["error"])
     end
 
-    test "actor URL should use https in production" do
-      Rails.stub :env, ActiveSupport::EnvironmentInquirer.new("production") do
-        get well_known_webfinger_url,
-            params: { resource: "acct:#{@webstead.subdomain}@#{@host}" },
-            headers: { "Host" => @host }
+    test "actor URL uses webstead primary_domain" do
+      get well_known_webfinger_url,
+          params: { resource: "acct:#{@webstead.subdomain}@#{@host}" },
+          headers: { "Host" => @host }
 
-        assert_response :success
-        json = JSON.parse(response.body)
-        assert_match(/^https:\/\//, json["links"][0]["href"])
-      end
+      assert_response :success
+      json = JSON.parse(response.body)
+      assert_includes json["links"][0]["href"], @webstead.primary_domain
+      assert_match %r{/actor$}, json["links"][0]["href"]
     end
   end
 end

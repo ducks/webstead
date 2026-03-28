@@ -1,5 +1,7 @@
 class Webstead < ApplicationRecord
   belongs_to :user, optional: true
+  has_many :comments, dependent: :destroy
+  has_many :posts, dependent: :destroy
   has_many :followers, dependent: :destroy
 
   encrypts :private_key_pem

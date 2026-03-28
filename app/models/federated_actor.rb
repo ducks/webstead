@@ -1,5 +1,5 @@
 class FederatedActor < ApplicationRecord
-  has_many :followers, dependent: :destroy
+  has_many :comments, dependent: :nullify
 
   validates :actor_uri, presence: true,
                         uniqueness: true,
@@ -8,6 +8,12 @@ class FederatedActor < ApplicationRecord
                        format: { with: URI::DEFAULT_PARSER.make_regexp(%w[http https]) }
   validates :shared_inbox_url, format: { with: URI::DEFAULT_PARSER.make_regexp(%w[http https]),
                                         allow_blank: true }
+
+  scope :stale, -> { where("last_fetched_at IS NULL OR last_fetched_at < ?", 24.hours.ago) }
+
+  def stale?
+    last_fetched_at.nil? || last_fetched_at < 24.hours.ago
+  end
 
   # Fetch and cache actor data
   def self.fetch_and_cache(actor_uri)

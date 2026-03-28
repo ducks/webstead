@@ -129,3 +129,4 @@ critical_paths = [
   "Verify form clears after successful submission",
   "Verify comments scoped to current webstead only"
 ]
+outcome = "success"

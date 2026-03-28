@@ -3,6 +3,7 @@ class User < ApplicationRecord
 
   belongs_to :webstead, optional: true
   has_one :owned_webstead, class_name: "Webstead", foreign_key: "user_id"
+  has_many :comments, dependent: :nullify
 
   validates :email, presence: true,
                     uniqueness: { case_sensitive: false },

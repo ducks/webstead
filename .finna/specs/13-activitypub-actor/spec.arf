@@ -32,3 +32,4 @@ how = """
    - Must respond with correct Content-Type header: `application/ld+json; profile="https://www.w3.org/ns/activitystreams"` or `application/activity+json`
 
 5. Add ActorSerializer#as_json method that returns proper ActivityPub Actor hash:
+outcome = "success"

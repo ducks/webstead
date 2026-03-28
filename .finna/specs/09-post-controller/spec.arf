@@ -126,3 +126,4 @@ dependencies = [
   "Comment model from step 5",
   "SubdomainRouter middleware from step 3"
 ]
+outcome = "success"

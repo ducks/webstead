@@ -129,3 +129,4 @@ validation = """
 6. Non-Follow activities return 501 Not Implemented
 7. Duplicate follows are idempotent (no duplicate records)
 """
+outcome = "success"

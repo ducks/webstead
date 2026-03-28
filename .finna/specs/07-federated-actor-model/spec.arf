@@ -80,3 +80,4 @@ dependencies = [
     "rails >= 8.0",
     "rspec-rails (for testing)"
 ]
+outcome = "success"

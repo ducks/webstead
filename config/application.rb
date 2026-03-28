@@ -12,13 +12,13 @@ require "action_mailbox/engine"
 require "action_text/engine"
 require "action_view/railtie"
 require "action_cable/engine"
-# require "rails/test_unit/railtie"
+require "rails/test_unit/railtie"
 
 # Require the gems listed in Gemfile, including any gems
 # you've limited to :test, :development, or :production.
 Bundler.require(*Rails.groups)
 
-module Webstead
+module WebsteadApp
   class Application < Rails::Application
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 8.1
@@ -28,8 +28,11 @@ module Webstead
     # Common ones are `templates`, `generators`, or `middleware`, for example.
     config.autoload_lib(ignore: %w[assets tasks])
 
-    # SetCurrentWebstead middleware for tenant isolation
-    # config.middleware.insert_before ActionDispatch::Executor, SetCurrentWebstead
+    # SetCurrentWebstead middleware for tenant isolation (registered in initializer)
+    initializer "webstead.middleware" do |app|
+      require_relative "../app/middleware/set_current_webstead"
+      app.middleware.insert_before ActionDispatch::Executor, SetCurrentWebstead
+    end
 
     # Configuration for the application, engines, and railties goes here.
     #

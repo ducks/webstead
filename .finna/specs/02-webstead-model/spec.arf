@@ -87,3 +87,4 @@ dependencies = [
     "Rails 8 (ActiveRecord, store_accessor)",
     "User model (belongs_to relationship, may need to create minimal version)"
 ]
+outcome = "success"

@@ -1,3 +1,7 @@
+# frozen_string_literal: true
+
+require "kramdown"
+
 module ActivityPub
   class OutboxController < ApplicationController
     skip_before_action :verify_authenticity_token

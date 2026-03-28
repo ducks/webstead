@@ -14,7 +14,7 @@ module ActivityPub
       return if post.draft? || post.scheduled?
 
       webstead = post.webstead
-      followers = webstead.followers.accepted.includes(:federated_actor)
+      followers = webstead.followers.accepted
 
       if followers.empty?
         Rails.logger.info("[FederatePostJob] No followers for post #{post_id}")
@@ -22,7 +22,7 @@ module ActivityPub
       end
 
       activity = build_create_activity(post)
-      inbox_urls = followers.map { |f| f.federated_actor.shared_inbox_url.presence || f.federated_actor.inbox_url }.uniq
+      inbox_urls = followers.map { |f| f.shared_inbox_url.presence || f.inbox_url }.uniq
 
       success_count = 0
       failure_count = 0
@@ -81,7 +81,7 @@ module ActivityPub
       request["Accept"] = "application/activity+json"
       request.body = body
 
-      ActivityPub::HttpSignatureService.sign_request(request, webstead, uri.host)
+      ActivityPub::HttpSignatureService.sign(request, uri, webstead.actor_public_key_id, webstead.private_key_pem)
 
       response = http.request(request)
 

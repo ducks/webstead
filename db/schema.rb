@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_02_22_000006) do
+ActiveRecord::Schema[8.1].define(version: 2026_02_22_000010) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -23,11 +23,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_22_000006) do
     t.datetime "updated_at", null: false
     t.bigint "user_id"
     t.bigint "webstead_id", null: false
+    t.index ["created_at"], name: "index_comments_on_created_at"
     t.index ["federated_actor_id"], name: "index_comments_on_federated_actor_id"
     t.index ["parent_id"], name: "index_comments_on_parent_id"
     t.index ["post_id", "created_at"], name: "index_comments_on_post_id_and_created_at"
     t.index ["user_id"], name: "index_comments_on_user_id"
+    t.index ["webstead_id", "parent_id"], name: "index_comments_on_webstead_id_and_parent_id"
+    t.index ["webstead_id", "post_id"], name: "index_comments_on_webstead_id_and_post_id"
     t.index ["webstead_id"], name: "index_comments_on_webstead_id"
+    t.check_constraint "user_id IS NOT NULL AND federated_actor_id IS NULL OR user_id IS NULL AND federated_actor_id IS NOT NULL", name: "comments_exactly_one_author"
   end
 
   create_table "federated_actors", force: :cascade do |t|
@@ -50,13 +54,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_22_000006) do
 
   create_table "followers", force: :cascade do |t|
     t.datetime "accepted_at"
+    t.string "actor_uri", null: false
     t.datetime "created_at", null: false
-    t.bigint "federated_actor_id", null: false
-    t.string "status", default: "pending", null: false
+    t.string "inbox_url", null: false
+    t.string "shared_inbox_url"
     t.datetime "updated_at", null: false
     t.bigint "webstead_id", null: false
-    t.index ["federated_actor_id"], name: "index_followers_on_federated_actor_id"
-    t.index ["webstead_id", "federated_actor_id"], name: "index_followers_on_webstead_and_actor", unique: true
+    t.index ["accepted_at"], name: "index_followers_on_accepted_at"
+    t.index ["webstead_id", "actor_uri"], name: "index_followers_on_webstead_and_actor", unique: true
     t.index ["webstead_id"], name: "index_followers_on_webstead_id"
   end
 
@@ -88,8 +93,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_22_000006) do
     t.datetime "created_at", null: false
     t.string "custom_domain", limit: 253
     t.text "description"
-    t.text "private_key"
-    t.text "public_key"
+    t.text "private_key_pem"
+    t.text "public_key_pem"
+    t.datetime "rotated_at"
     t.jsonb "settings", default: {}, null: false
     t.string "subdomain", limit: 63, null: false
     t.string "title"
@@ -103,11 +109,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_22_000006) do
     t.check_constraint "subdomain::text ~ '^[a-z0-9][a-z0-9-]*[a-z0-9]$'::text", name: "subdomain_format_check"
   end
 
-  add_foreign_key "comments", "federated_actors"
-  add_foreign_key "comments", "posts"
-  add_foreign_key "comments", "users"
-  add_foreign_key "comments", "websteads"
-  add_foreign_key "followers", "federated_actors"
+  add_foreign_key "comments", "comments", column: "parent_id", on_delete: :cascade
+  add_foreign_key "comments", "federated_actors", on_delete: :nullify
+  add_foreign_key "comments", "posts", on_delete: :cascade
+  add_foreign_key "comments", "users", on_delete: :nullify
+  add_foreign_key "comments", "websteads", on_delete: :cascade
   add_foreign_key "followers", "websteads"
   add_foreign_key "posts", "websteads"
   add_foreign_key "users", "websteads"

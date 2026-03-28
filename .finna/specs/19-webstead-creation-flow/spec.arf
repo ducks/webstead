@@ -169,3 +169,4 @@ dependencies = [
   "Rails 8 authentication (user signup/signin)",
   "Turbo Frames (real-time subdomain availability check)"
 ]
+outcome = "success"

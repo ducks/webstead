@@ -126,7 +126,7 @@ module ActivityPub
       user = User.find_by(username: username)
       return render json: { error: "User not found" }, status: :not_found unless user
 
-      @webstead = user.webstead
+      @webstead = user.owned_webstead || user.webstead
       return render json: { error: "Webstead not found" }, status: :not_found unless @webstead
 
       @user = user
@@ -145,11 +145,14 @@ module ActivityPub
       actor_document = fetch_actor_document(actor_uri)
       return render json: { error: "Failed to fetch follower actor" }, status: :service_unavailable unless actor_document
 
+      inbox_url = actor_document["inbox"]
+      shared_inbox_url = actor_document.dig("endpoints", "sharedInbox")
+
       # Find or create federated actor
-      federated_actor = FederatedActor.find_or_create_by!(actor_uri: actor_uri) do |actor|
+      FederatedActor.find_or_create_by!(actor_uri: actor_uri) do |actor|
         actor.actor_type = actor_document["type"]
-        actor.inbox_url = actor_document["inbox"]
-        actor.shared_inbox_url = actor_document.dig("endpoints", "sharedInbox")
+        actor.inbox_url = inbox_url
+        actor.shared_inbox_url = shared_inbox_url
         actor.username = actor_document["preferredUsername"]
         actor.domain = URI.parse(actor_uri).host
         actor.public_key = actor_document.dig("publicKey", "publicKeyPem")
@@ -157,20 +160,22 @@ module ActivityPub
       end
 
       # Find or create follower (idempotent)
-      follower = Follower.find_or_create_by!(
+      Follower.find_or_create_by!(
         webstead: @webstead,
-        federated_actor: federated_actor
+        actor_uri: actor_uri
       ) do |f|
-        f.status = "accepted"
+        f.inbox_url = inbox_url
+        f.shared_inbox_url = shared_inbox_url
+        f.accepted_at = Time.current
       end
 
       # Generate and deliver Accept activity
       accept_activity = build_accept_activity
-      inbox_url = federated_actor.shared_inbox_url || federated_actor.inbox_url
+      delivery_inbox = shared_inbox_url || inbox_url
 
       ActivityPub::DeliveryJob.perform_later(
         activity: accept_activity,
-        inbox_url: inbox_url,
+        inbox_url: delivery_inbox,
         signing_key: @webstead.private_key_pem,
         signing_key_id: @webstead.actor_public_key_id
       )

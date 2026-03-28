@@ -1,10 +1,18 @@
 class Post < ApplicationRecord
   belongs_to :webstead
+  has_many :comments, dependent: :destroy
   # TODO: Uncomment when User model is created and migration adds user_id (step 4)
   # belongs_to :user, optional: true
 
+  # Tenant isolation: scope all queries to current webstead
+  default_scope -> { where(webstead_id: Current.webstead.id) if Current.webstead }
+
+  # Auto-assign webstead from Current on creation
+  before_validation :set_webstead_id, on: :create
+
   # Validations
   validates :title, presence: true, length: { minimum: 1, maximum: 300 }
+  validates :webstead_id, presence: true
   validates :body, presence: true, if: :published?
   validate :published_posts_must_have_timestamp
 
@@ -12,7 +20,7 @@ class Post < ApplicationRecord
   scope :published, -> { where.not(published_at: nil).where("published_at <= ?", Time.current) }
   scope :draft, -> { where(published_at: nil) }
   scope :scheduled, -> { where("published_at > ?", Time.current) }
-  scope :recent, -> { order(published_at: :desc, created_at: :desc) }
+  scope :recent, -> { order(Arel.sql("published_at DESC NULLS LAST, created_at DESC")) }
 
   # Tenant isolation
   def self.for_webstead(webstead)
@@ -53,7 +61,11 @@ class Post < ApplicationRecord
   end
 
   def enqueue_federation
-    ActivityPub::FederatePostJob.perform_later(id)
+    ActivityPub::FederatePostJob.perform_later(id) if defined?(ActivityPub::FederatePostJob)
+  end
+
+  def set_webstead_id
+    self.webstead_id ||= Current.webstead&.id
   end
 
   def published_posts_must_have_timestamp

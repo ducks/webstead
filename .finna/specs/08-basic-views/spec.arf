@@ -27,3 +27,4 @@ files = [
   "Gemfile"
 ]
 dependencies = ["redcarpet", "tailwindcss-rails"]
+outcome = "success"

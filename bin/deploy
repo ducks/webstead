@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Deploy Webstead to production.
+#
+# Prerequisites:
+#   1. Server provisioned with Docker 20.10+
+#   2. SSH key access configured
+#   3. DNS records configured:
+#      - A record: webstead.dev -> server IP
+#      - A record: *.webstead.dev -> server IP
+#   4. Environment variables set:
+#      - KAMAL_REGISTRY_USERNAME
+#      - KAMAL_REGISTRY_PASSWORD
+#      - SECRET_KEY_BASE
+#      - WEBSTEAD_DATABASE_PASSWORD
+#
+# Usage:
+#   bin/deploy          # Full deploy
+#   bin/deploy setup    # First-time setup (provisions accessories)
+#   bin/deploy rollback # Rollback to previous version
+
+command=${1:-deploy}
+
+case $command in
+  setup)
+    echo "setting up production environment..."
+    echo ""
+    echo "step 1: bootstrap server and install docker"
+    bin/kamal server bootstrap
+    echo ""
+    echo "step 2: push environment variables"
+    bin/kamal env push
+    echo ""
+    echo "step 3: start database accessory"
+    bin/kamal accessory boot db
+    echo ""
+    echo "step 4: create production databases"
+    bin/kamal accessory exec db \
+      "psql -U webstead -d webstead_production -c 'SELECT 1'" 2>/dev/null || \
+    bin/kamal accessory exec db \
+      "createdb -U webstead webstead_production && \
+       createdb -U webstead webstead_production_cache && \
+       createdb -U webstead webstead_production_queue && \
+       createdb -U webstead webstead_production_cable"
+    echo ""
+    echo "step 5: deploy application"
+    bin/kamal deploy
+    echo ""
+    echo "setup complete. verify with:"
+    echo "  curl -I https://webstead.dev/up"
+    echo "  bin/kamal console"
+    ;;
+  deploy)
+    echo "deploying webstead..."
+    bin/kamal deploy
+    echo ""
+    echo "deploy complete. verify:"
+    echo "  bin/kamal app logs"
+    ;;
+  rollback)
+    echo "rolling back to previous version..."
+    bin/kamal rollback
+    echo ""
+    echo "rollback complete."
+    ;;
+  *)
+    echo "unknown command: $command"
+    echo "usage: bin/deploy [setup|deploy|rollback]"
+    exit 1
+    ;;
+esac

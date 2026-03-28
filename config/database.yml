@@ -90,6 +90,7 @@ production:
     database: webstead_production
     username: webstead
     password: <%= ENV["WEBSTEAD_DATABASE_PASSWORD"] %>
+    host: <%= ENV.fetch("DB_HOST", "localhost") %>
   cache:
     <<: *primary_production
     database: webstead_production_cache

@@ -2,7 +2,7 @@ require "test_helper"
 
 class PostTest < ActiveSupport::TestCase
   def setup
-    @user = User.create!(email: "test@example.com", password: "password123")
+    @user = User.create!(email: "test@example.com", username: "testuser", password: "password123", password_confirmation: "password123")
     @webstead = Webstead.create!(user: @user, subdomain: "testuser")
     @post = Post.new(webstead: @webstead, title: "Test Post", body: "Test content")
   end
@@ -147,7 +147,7 @@ class PostTest < ActiveSupport::TestCase
   end
 
   test "for_webstead returns only posts for given webstead" do
-    other_user = User.create!(email: "other@example.com", password: "password123")
+    other_user = User.create!(email: "other@example.com", username: "otheruser", password: "password123", password_confirmation: "password123")
     other_webstead = Webstead.create!(user: other_user, subdomain: "otheruser")
 
     post1 = Post.create!(webstead: @webstead, title: "Post 1", body: "Content 1")

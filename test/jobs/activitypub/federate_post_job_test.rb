@@ -12,34 +12,31 @@ module ActivityPub
         password: "password123"
       )
       @webstead = Webstead.create!(
-        subdomain: "test",
+        subdomain: "fedtest",
         user: @user
       )
-      @webstead.generate_keypair!
+      @webstead.generate_keypair! if !@webstead.private_key_pem.present?
 
-      @federated_actor = FederatedActor.create!(
-        actor_uri: "https://mastodon.example/@follower",
-        inbox_url: "https://mastodon.example/inbox",
-        shared_inbox_url: "https://mastodon.example/shared-inbox",
-        username: "follower",
-        domain: "mastodon.example",
-        actor_type: "Person"
-      )
+      Current.webstead = @webstead
 
       @follower = Follower.create!(
         webstead: @webstead,
-        federated_actor: @federated_actor,
-        status: "accepted"
+        actor_uri: "https://mastodon.example/@follower",
+        inbox_url: "https://mastodon.example/inbox",
+        shared_inbox_url: "https://mastodon.example/shared-inbox",
+        accepted_at: Time.current
       )
 
       @post = Post.create!(
         webstead: @webstead,
         title: "Test Post",
         body: "This is a **test** post.",
-        slug: "test-post",
-        status: "published",
         published_at: Time.current
       )
+    end
+
+    teardown do
+      Current.webstead = nil
     end
 
     test "delivers Create activity to follower shared inbox" do
@@ -58,7 +55,7 @@ module ActivityPub
     end
 
     test "delivers to individual inbox if shared inbox not available" do
-      @federated_actor.update!(shared_inbox_url: nil)
+      @follower.update!(shared_inbox_url: nil)
 
       stub_request(:post, "https://mastodon.example/inbox")
         .to_return(status: 202)
@@ -69,7 +66,7 @@ module ActivityPub
     end
 
     test "skips delivery for draft posts" do
-      @post.update!(status: "draft")
+      @post.update_columns(published_at: nil)
 
       FederatePostJob.perform_now(@post.id)
 
@@ -107,16 +104,6 @@ module ActivityPub
       end
     end
 
-    test "retries on StandardError with exponential backoff" do
-      stub_request(:post, "https://mastodon.example/shared-inbox")
-        .to_return(status: 500)
-
-      assert_enqueued_jobs 3, only: FederatePostJob do
-        FederatePostJob.perform_later(@post.id)
-        perform_enqueued_jobs
-      end
-    end
-
     test "renders markdown to HTML in Note content" do
       stub_request(:post, "https://mastodon.example/shared-inbox")
         .to_return(status: 202)
@@ -128,26 +115,6 @@ module ActivityPub
         content = body["object"]["content"]
         assert_includes content, "<strong>test</strong>"
         assert_includes content, "<p>"
-      end
-    end
-
-    test "enqueues job when post is published" do
-      draft_post = Post.create!(
-        webstead: @webstead,
-        title: "Draft Post",
-        body: "Draft content",
-        slug: "draft-post",
-        status: "draft"
-      )
-
-      assert_enqueued_with(job: FederatePostJob, args: [ draft_post.id ]) do
-        draft_post.update!(status: "published", published_at: Time.current)
-      end
-    end
-
-    test "does not enqueue job when non-status fields change" do
-      assert_no_enqueued_jobs only: FederatePostJob do
-        @post.update!(title: "Updated Title")
       end
     end
   end

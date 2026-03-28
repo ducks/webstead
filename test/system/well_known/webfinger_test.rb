@@ -25,7 +25,7 @@ module WellKnown
       assert_equal "application/activity+json", link["type"]
 
       # Verify actor href format
-      expected_href = "http://#{@webstead.subdomain}.#{@host}/actor"
+      expected_href = "http://#{@webstead.primary_domain}/actor"
       assert_equal expected_href, link["href"]
     end
 

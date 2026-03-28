@@ -4,6 +4,7 @@ class SubdomainRoutingTest < ActionDispatch::IntegrationTest
   setup do
     @user = User.create!(
       email: "alice@example.com",
+      username: "alice",
       password: "password123",
       password_confirmation: "password123"
     )

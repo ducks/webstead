@@ -83,3 +83,4 @@ dependencies = [
     "Node.js 18+ (asset compilation)",
     "Nix (optional, for reproducible environment)"
 ]
+outcome = "success"

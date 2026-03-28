@@ -109,3 +109,4 @@ dependencies = [
   "Rails default_scope (careful with associations)",
   "Request object for subdomain/host extraction"
 ]
+outcome = "success"

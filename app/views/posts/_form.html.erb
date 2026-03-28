@@ -1,0 +1,32 @@
+<%= form_with(model: post, class: "space-y-6") do |form| %>
+  <% if post.errors.any? %>
+    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+      <h2 class="text-red-800 font-semibold mb-2"><%= pluralize(post.errors.count, "error") %> prohibited this post from being saved:</h2>
+      <ul class="list-disc list-inside text-red-700">
+        <% post.errors.full_messages.each do |message| %>
+          <li><%= message %></li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
+
+  <div>
+    <%= form.label :title, class: "block text-sm font-medium text-gray-700 mb-1" %>
+    <%= form.text_field :title, class: "w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" %>
+  </div>
+
+  <div>
+    <%= form.label :body, class: "block text-sm font-medium text-gray-700 mb-1" %>
+    <%= form.text_area :body, rows: 12, class: "w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" %>
+  </div>
+
+  <div>
+    <%= form.label :published_at, class: "block text-sm font-medium text-gray-700 mb-1" %>
+    <%= form.datetime_local_field :published_at, class: "border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" %>
+    <p class="text-sm text-gray-500 mt-1">Leave blank to save as draft. Set to a future time to schedule.</p>
+  </div>
+
+  <div>
+    <%= form.submit class: "bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 cursor-pointer" %>
+  </div>
+<% end %>
