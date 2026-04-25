@@ -2,21 +2,22 @@ require "test_helper"
 
 class TenantIsolationTest < ActiveSupport::TestCase
   def setup
+    suffix = SecureRandom.hex(4)
     @user_a = User.create!(
-      email: "alice@example.com",
-      username: "alice",
+      email: "alice_#{suffix}@example.com",
+      username: "alice_#{suffix}",
       password: "password123",
       password_confirmation: "password123"
     )
-    @webstead_a = Webstead.create!(user: @user_a, subdomain: "alice")
+    @webstead_a = Webstead.create!(user: @user_a, subdomain: "alice#{suffix}")
 
     @user_b = User.create!(
-      email: "bob@example.com",
-      username: "bob",
+      email: "bob_#{suffix}@example.com",
+      username: "bob_#{suffix}",
       password: "password123",
       password_confirmation: "password123"
     )
-    @webstead_b = Webstead.create!(user: @user_b, subdomain: "bobsite")
+    @webstead_b = Webstead.create!(user: @user_b, subdomain: "bobsite#{suffix}")
 
     # Create posts without default_scope interference
     @post_a = Post.create!(webstead: @webstead_a, title: "Alice Post", body: "Alice content")

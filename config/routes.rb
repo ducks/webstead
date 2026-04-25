@@ -34,7 +34,8 @@ Rails.application.routes.draw do
   get "/.well-known/webfinger", to: "well_known/webfinger#show", as: :well_known_webfinger
 
   # Subdomain-scoped routes (tenant content)
-  constraints subdomain: /.+/ do
+  # Exclude reserved subdomains (www, api, admin)
+  constraints subdomain: /^(?!www$|api$|admin$).+/ do
     # ActivityPub Actor endpoint
     get "/actor", to: "activitypub/actors#show"
     get "/u/:username", to: "activitypub/actors#show"
