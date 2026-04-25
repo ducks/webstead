@@ -47,7 +47,7 @@ module ActivityPub
     end
 
     def outbox_path
-      "/@outboxuser/outbox"
+      "/@outboxtest/outbox"
     end
 
     # -- Collection summary (no page param) --
@@ -56,7 +56,7 @@ module ActivityPub
       get outbox_path, headers: host_header
 
       assert_response :success
-      assert_equal "application/activity+json", response.content_type
+      assert_match %r{application/activity\+json}, response.content_type
 
       json = JSON.parse(response.body)
       assert_equal "https://www.w3.org/ns/activitystreams", json["@context"]

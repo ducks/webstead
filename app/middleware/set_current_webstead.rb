@@ -47,6 +47,6 @@ class SetCurrentWebstead
     body = File.read(
       Rails.root.join("app", "views", "errors", "webstead_not_found.html.erb")
     )
-    [404, { "content-type" => "text/html; charset=utf-8" }, [body]]
+    [ 404, { "content-type" => "text/html; charset=utf-8" }, [ body ] ]
   end
 end

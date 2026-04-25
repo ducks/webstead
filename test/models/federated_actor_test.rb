@@ -39,7 +39,7 @@ class FederatedActorTest < ActiveSupport::TestCase
   end
 
   test "actor_uri must be a valid http or https URI" do
-    invalid_uris = ["not-a-uri", "ftp://example.com/users/test", ""]
+    invalid_uris = [ "not-a-uri", "ftp://example.com/users/test", "" ]
 
     invalid_uris.each do |uri|
       @actor.actor_uri = uri
