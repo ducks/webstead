@@ -55,4 +55,7 @@ Rails.application.configure do
   config.active_record.encryption.primary_key = "test-primary-key-that-is-at-least-12-bytes"
   config.active_record.encryption.deterministic_key = "test-deterministic-key-at-least-12-bytes"
   config.active_record.encryption.key_derivation_salt = "test-key-derivation-salt"
+
+  # Platform base domain (tests use `<sub>.webstead.test`).
+  config.x.webstead_domain = "webstead.test"
 end

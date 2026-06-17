@@ -46,11 +46,11 @@ class WebsteadsController < ApplicationController
     end
 
     if Webstead.exists?(subdomain: subdomain)
-      render json: { available: false, message: "#{subdomain}.webstead.dev is already taken" }
+      render json: { available: false, message: "#{subdomain}.#{Webstead.platform_domain} is already taken" }
       return
     end
 
-    render json: { available: true, message: "#{subdomain}.webstead.dev is available!" }
+    render json: { available: true, message: "#{subdomain}.#{Webstead.platform_domain} is available!" }
   end
 
   def dashboard

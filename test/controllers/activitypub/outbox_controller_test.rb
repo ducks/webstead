@@ -43,7 +43,7 @@ module ActivityPub
     end
 
     def host_header
-      { "Host" => "outboxtest.webstead.dev" }
+      { "Host" => "#{@webstead.subdomain}.#{platform_domain}" }
     end
 
     def outbox_path
@@ -157,7 +157,7 @@ module ActivityPub
     # -- 404 for unknown webstead --
 
     test "returns 404 for nonexistent webstead" do
-      get "/@nonexistent/outbox", headers: { "Host" => "nonexistent.webstead.dev" }
+      get "/@nonexistent/outbox", headers: { "Host" => "nonexistent.#{platform_domain}" }
 
       assert_response :not_found
     end

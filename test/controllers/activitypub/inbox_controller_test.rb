@@ -51,7 +51,7 @@ module ActivityPub
     end
 
     def host_header
-      { "Host" => "inboxtest.webstead.dev" }
+      { "Host" => "#{@webstead.subdomain}.#{platform_domain}" }
     end
 
     def inbox_path
@@ -71,7 +71,7 @@ module ActivityPub
       signed_headers = "(request-target) host date digest"
       signing_string = [
         "(request-target): post #{path}",
-        "host: inboxtest.webstead.dev",
+        "host: #{@webstead.subdomain}.#{platform_domain}",
         "date: #{date}",
         "digest: #{digest}"
       ].join("\n")
@@ -186,7 +186,7 @@ module ActivityPub
       signed_headers = "(request-target) host date digest"
       signing_string = [
         "(request-target): post #{inbox_path}",
-        "host: inboxtest.webstead.dev",
+        "host: #{@webstead.subdomain}.#{platform_domain}",
         "date: #{date}",
         "digest: #{digest}"
       ].join("\n")

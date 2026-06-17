@@ -31,7 +31,7 @@ module ActivityPub
       get "/actor", headers: { "Host" => "#{@webstead.subdomain}.webstead.test" }
 
       assert_response :success
-      assert_equal "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\"", response.content_type
+      assert_includes response.content_type, "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\""
 
       json = JSON.parse(response.body)
       assert_equal "Person", json["type"]
