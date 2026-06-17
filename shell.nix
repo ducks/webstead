@@ -73,12 +73,12 @@ pkgs.mkShell {
     function pg_start() {
       mkdir -p "$PWD/tmp/postgres-socket"
       if [ -d "$PGDATA" ]; then
-        pg_ctl -D "$PGDATA" -l "$PGDATA/server.log" -o "-k $PWD/tmp/postgres-socket" start
+        pg_ctl -D "$PGDATA" -l "$PGDATA/server.log" -o "-k $PWD/tmp/postgres-socket -c listen_addresses='''" start
         echo "PostgreSQL started (socket: $PWD/tmp/postgres-socket)"
       else
         echo "Initializing PostgreSQL database..."
         initdb -D "$PGDATA" --no-locale --encoding=UTF8
-        pg_ctl -D "$PGDATA" -l "$PGDATA/server.log" -o "-k $PWD/tmp/postgres-socket" start
+        pg_ctl -D "$PGDATA" -l "$PGDATA/server.log" -o "-k $PWD/tmp/postgres-socket -c listen_addresses='''" start
         echo "PostgreSQL started (socket: $PWD/tmp/postgres-socket)"
       fi
     }
