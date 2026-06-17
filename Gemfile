@@ -53,6 +53,10 @@ group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
 
+  # Pin minitest to 5.x: minitest 6.x (pulled in transitively) is incompatible
+  # with Rails 8.1's rails/test_help + minitest plugin and crashes the runner.
+  gem "minitest", "~> 5.25"
+
   # RSpec testing framework
   gem "rspec-rails", "~> 7.1"
 
