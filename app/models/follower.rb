@@ -8,14 +8,14 @@ class Follower < ApplicationRecord
   before_validation :set_webstead_id, on: :create
 
   validates :actor_uri, presence: true,
-                        format: { with: /\Ahttps?:\/\/.+/,
+                        format: { with: /\Ahttps?:\/\/[^\s]+\z/,
                                   message: "must be a valid HTTP(S) URL" },
                         uniqueness: { scope: :webstead_id,
                                       message: "is already following this webstead" }
   validates :inbox_url, presence: true,
-                        format: { with: /\Ahttps?:\/\/.+/,
+                        format: { with: /\Ahttps?:\/\/[^\s]+\z/,
                                   message: "must be a valid HTTP(S) URL" }
-  validates :shared_inbox_url, format: { with: /\Ahttps?:\/\/.+/,
+  validates :shared_inbox_url, format: { with: /\Ahttps?:\/\/[^\s]+\z/,
                                          message: "must be a valid HTTP(S) URL",
                                          allow_blank: true }
   validates :webstead_id, presence: true
