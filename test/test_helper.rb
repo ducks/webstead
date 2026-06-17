@@ -11,5 +11,11 @@ module ActiveSupport
     fixtures :all
 
     # Add more helper methods to be used by all tests here...
+
+    # Platform base domain for the current env (webstead.test in test).
+    # Derive from config — never hardcode the domain in individual tests.
+    def platform_domain
+      Rails.application.config.x.webstead_domain
+    end
   end
 end

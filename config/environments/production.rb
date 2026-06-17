@@ -88,4 +88,8 @@ Rails.application.configure do
 
   # Skip DNS rebinding protection for the default health check endpoint.
   config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+
+  # Platform base domain. Hosts under it (`<sub>.webstead.dev`) resolve a
+  # webstead by subdomain; any other host is treated as a custom domain.
+  config.x.webstead_domain = "webstead.dev"
 end

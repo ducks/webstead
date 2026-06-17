@@ -41,9 +41,16 @@ class Webstead < ApplicationRecord
   # Settings accessor for jsonb column
   store_accessor :settings, :theme, :analytics_id, :custom_css
 
+  # The platform base domain (e.g. "webstead.dev" in production,
+  # "webstead.test" in test). Single source of truth — never hardcode the
+  # domain anywhere else; read it from here (or config.x.webstead_domain).
+  def self.platform_domain
+    Rails.application.config.x.webstead_domain
+  end
+
   # Helper methods
   def primary_domain
-    custom_domain.presence || "#{subdomain}.webstead.dev"
+    custom_domain.presence || "#{subdomain}.#{self.class.platform_domain}"
   end
 
   def url

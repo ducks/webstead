@@ -21,7 +21,7 @@ namespace :production do
       end
 
       domain = webstead.primary_domain
-      resource = "acct:#{webstead.subdomain}@webstead.dev"
+      resource = "acct:#{webstead.subdomain}@#{Webstead.platform_domain}"
       url = "https://#{domain}/.well-known/webfinger?resource=#{resource}"
 
       puts "Testing WebFinger: #{url}"

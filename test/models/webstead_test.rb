@@ -113,11 +113,11 @@ class WebsteadTest < ActiveSupport::TestCase
   end
 
   test "primary_domain returns subdomain if no custom domain" do
-    assert_equal "testuser.webstead.dev", @webstead.primary_domain
+    assert_equal "testuser.#{platform_domain}", @webstead.primary_domain
   end
 
   test "url returns https URL" do
-    assert_equal "https://testuser.webstead.dev", @webstead.url
+    assert_equal "https://testuser.#{platform_domain}", @webstead.url
 
     @webstead.custom_domain = "example.com"
     assert_equal "https://example.com", @webstead.url
@@ -174,11 +174,11 @@ class WebsteadTest < ActiveSupport::TestCase
   end
 
   test "actor_uri returns correct URI" do
-    assert_equal "https://testuser.webstead.dev/actor", @webstead.actor_uri
+    assert_equal "https://testuser.#{platform_domain}/actor", @webstead.actor_uri
   end
 
   test "actor_public_key_id returns correct ID" do
-    assert_equal "https://testuser.webstead.dev/actor#main-key", @webstead.actor_public_key_id
+    assert_equal "https://testuser.#{platform_domain}/actor#main-key", @webstead.actor_public_key_id
   end
 
   test "private_key_object returns OpenSSL key" do
