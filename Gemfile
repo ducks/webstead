@@ -55,7 +55,7 @@ group :development, :test do
 
   # Pin minitest to 5.x: minitest 6.x (pulled in transitively) is incompatible
   # with Rails 8.1's rails/test_help + minitest plugin and crashes the runner.
-  gem "minitest", "~> 5.25"
+  gem "minitest", "~> 6.0"
 
   # RSpec testing framework
   gem "rspec-rails", "~> 7.1"
